@@ -34,7 +34,8 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Legend, ChartTooltip)
 
 const STOCK_SYMBOL = 'IBM'
 const MARKET_SYMBOL = 'SPY'
-const YAHOO_CHART_URL = 'https://query1.finance.yahoo.com/v8/finance/chart'
+const ALPHA_VANTAGE_URL = 'https://www.alphavantage.co/query'
+const ALPHA_VANTAGE_KEY = 'demo'
 const OWNER_AVATAR = 'https://github.com/brown9804.png'
 const ORG_AVATAR = 'https://github.com/Cloud2BR.png'
 
@@ -59,26 +60,32 @@ const INDICATOR_META = [
   },
 ]
 
-const fetchChartData = async (symbol) => {
+const fetchDailySeries = async (symbol) => {
   const response = await fetch(
-    `${YAHOO_CHART_URL}/${symbol}?range=1y&interval=1d&includePrePost=false&events=div,splits`,
+    `${ALPHA_VANTAGE_URL}?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=compact&apikey=${ALPHA_VANTAGE_KEY}`,
   )
 
   if (!response.ok) {
     throw new Error(`Unable to load data for ${symbol}.`)
   }
 
-  return response.json()
+  const payload = await response.json()
+
+  if (payload?.Note || payload?.Information || payload?.Error) {
+    throw new Error('Alpha Vantage limit reached. Please wait a minute and click Load Data again.')
+  }
+
+  return payload
 }
 
-const parseChartData = (payload) => {
-  const chartResult = payload?.chart?.result?.[0]
-  const closes = chartResult?.indicators?.quote?.[0]?.close ?? []
+const parseDailySeries = (payload) => {
+  const series = payload?.['Time Series (Daily)']
+  if (!series) return []
 
-  return {
-    meta: chartResult?.meta ?? {},
-    prices: closes.filter((value) => Number.isFinite(value)),
-  }
+  return Object.entries(series)
+    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+    .map(([, bar]) => Number.parseFloat(bar['4. close']))
+    .filter((value) => Number.isFinite(value))
 }
 
 const dailyReturns = (prices) =>
@@ -164,18 +171,16 @@ function App() {
 
     try {
       const [stockPayload, marketPayload] = await Promise.all([
-        fetchChartData(STOCK_SYMBOL),
-        fetchChartData(MARKET_SYMBOL),
+        fetchDailySeries(STOCK_SYMBOL),
+        fetchDailySeries(MARKET_SYMBOL),
       ])
 
-      const stockSeries = parseChartData(stockPayload)
-      const marketSeries = parseChartData(marketPayload)
-      const stockPrices = stockSeries.prices
-      const marketPrices = marketSeries.prices
-      const currentPrice = stockSeries.meta?.regularMarketPrice ?? stockPrices[stockPrices.length - 1]
+      const stockPrices = parseDailySeries(stockPayload)
+      const marketPrices = parseDailySeries(marketPayload)
+      const currentPrice = stockPrices[stockPrices.length - 1]
 
       if (!Number.isFinite(currentPrice) || stockPrices.length < 30 || marketPrices.length < 30) {
-        throw new Error('No price history returned from Yahoo Finance.')
+        throw new Error('No price history returned from Alpha Vantage.')
       }
 
       const stockReturns = dailyReturns(stockPrices)
@@ -197,7 +202,7 @@ function App() {
       const signal = trafficSignal(riskLevel, potentialGain)
 
       setDashboard({
-        stockName: stockSeries.meta?.longName || stockSeries.meta?.shortName || STOCK_SYMBOL,
+        stockName: 'International Business Machines Corporation',
         symbol: STOCK_SYMBOL,
         currentPrice,
         riskLevel,
@@ -321,7 +326,7 @@ function App() {
                     <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
                       {item.icon}
                       <Typography variant="subtitle2">{item.title}</Typography>
-                      <Tooltip title="Loads from Yahoo Finance chart data when you click Load Data.">
+                      <Tooltip title="Loads from Alpha Vantage daily stock data when you click Load Data.">
                         <InfoOutlinedIcon fontSize="inherit" className="hint-icon" />
                       </Tooltip>
                     </Stack>
@@ -473,9 +478,6 @@ function App() {
                       <Typography variant="body1" sx={{ mb: 1.5 }}>
                         Cloud2BR supports publishing, release workflows, and project distribution.
                       </Typography>
-                      <Link href="https://github.com/Cloud2BR/docs-foundry" target="_blank" rel="noreferrer">
-                        Cloud2BR/docs-foundry
-                      </Link>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -492,7 +494,7 @@ function App() {
                       <strong>Product:</strong> Beginner stock analysis dashboard for GitHub Pages
                     </li>
                     <li>
-                      <strong>Data source:</strong> Yahoo Finance chart endpoint, no API key required
+                      <strong>Data source:</strong> Alpha Vantage daily stock endpoint
                     </li>
                     <li>
                       <strong>Release channel:</strong> GitHub Actions Pages deployment from main
