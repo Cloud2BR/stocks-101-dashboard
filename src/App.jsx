@@ -78,16 +78,78 @@ const STOCK_RISK_FIT = {
 
 const COMMON_STOCK_OPTIONS = [
   { symbol: 'AAPL', name: 'Apple Inc.' },
-  { symbol: 'MSFT', name: 'Microsoft Corporation' },
+  { symbol: 'AMGN', name: 'Amgen Inc.' },
   { symbol: 'AMZN', name: 'Amazon.com Inc.' },
-  { symbol: 'GOOGL', name: 'Alphabet Inc. Class A' },
-  { symbol: 'META', name: 'Meta Platforms Inc.' },
-  { symbol: 'NVDA', name: 'NVIDIA Corporation' },
-  { symbol: 'TSLA', name: 'Tesla Inc.' },
+  { symbol: 'AXP', name: 'American Express Company' },
+  { symbol: 'BA', name: 'The Boeing Company' },
+  { symbol: 'CAT', name: 'Caterpillar Inc.' },
+  { symbol: 'CRM', name: 'Salesforce Inc.' },
+  { symbol: 'CSCO', name: 'Cisco Systems Inc.' },
+  { symbol: 'CVX', name: 'Chevron Corporation' },
+  { symbol: 'DIS', name: 'The Walt Disney Company' },
+  { symbol: 'GS', name: 'The Goldman Sachs Group Inc.' },
+  { symbol: 'HD', name: 'The Home Depot Inc.' },
+  { symbol: 'HON', name: 'Honeywell International Inc.' },
   { symbol: 'IBM', name: 'International Business Machines Corporation' },
+  { symbol: 'JNJ', name: 'Johnson & Johnson' },
   { symbol: 'JPM', name: 'JPMorgan Chase & Co.' },
-  { symbol: 'NFLX', name: 'Netflix Inc.' },
+  { symbol: 'KO', name: 'The Coca-Cola Company' },
+  { symbol: 'MCD', name: "McDonald's Corporation" },
+  { symbol: 'MMM', name: '3M Company' },
+  { symbol: 'MRK', name: 'Merck & Co. Inc.' },
+  { symbol: 'MSFT', name: 'Microsoft Corporation' },
+  { symbol: 'NKE', name: 'NIKE Inc.' },
+  { symbol: 'NVDA', name: 'NVIDIA Corporation' },
+  { symbol: 'PG', name: 'The Procter & Gamble Company' },
+  { symbol: 'SHW', name: 'The Sherwin-Williams Company' },
+  { symbol: 'TRV', name: 'The Travelers Companies Inc.' },
+  { symbol: 'UNH', name: 'UnitedHealth Group Incorporated' },
+  { symbol: 'V', name: 'Visa Inc.' },
+  { symbol: 'VZ', name: 'Verizon Communications Inc.' },
+  { symbol: 'WMT', name: 'Walmart Inc.' },
 ]
+
+const resolveSymbolFromInput = async (inputText, stockOptions) => {
+  const raw = inputText.trim()
+  if (!raw) throw new Error('Please select or type a stock symbol or company name.')
+
+  const upper = raw.toUpperCase()
+  const exactSymbol = stockOptions.find((item) => item.symbol === upper)
+  if (exactSymbol) return { symbol: exactSymbol.symbol, name: exactSymbol.name }
+
+  const normalized = raw.toLowerCase()
+  const exactName = stockOptions.find((item) => item.name.toLowerCase() === normalized)
+  if (exactName) return { symbol: exactName.symbol, name: exactName.name }
+
+  const partialName = stockOptions.find((item) => item.name.toLowerCase().includes(normalized))
+  if (partialName) return { symbol: partialName.symbol, name: partialName.name }
+
+  const looksLikeTicker = /^[a-zA-Z.-]{1,10}$/.test(raw)
+  if (looksLikeTicker) return { symbol: upper, name: upper }
+
+  const endpoint =
+    `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(raw)}&quotesCount=8&newsCount=0`
+  const response = await fetch(endpoint)
+  if (!response.ok) {
+    throw new Error('Could not resolve that company name right now. Try typing the ticker symbol.')
+  }
+
+  const payload = await response.json()
+  const firstEquity = (payload?.quotes ?? []).find((quote) => {
+    const symbol = quote?.symbol
+    const type = quote?.quoteType
+    return typeof symbol === 'string' && symbol && (!type || type === 'EQUITY')
+  })
+
+  if (!firstEquity?.symbol) {
+    throw new Error('No matching stock symbol found. Try another company name or ticker.')
+  }
+
+  return {
+    symbol: firstEquity.symbol.toUpperCase(),
+    name: firstEquity.longname || firstEquity.shortname || firstEquity.symbol.toUpperCase(),
+  }
+}
 
 const INDICATOR_META = [
   {
@@ -304,6 +366,7 @@ function App() {
   const [targetReturn,   setTargetReturn]   = useState('10')
   const [planResult,     setPlanResult]     = useState(null)
   const [planError,      setPlanError]      = useState('')
+  const marketWatchSymbol = (dashboard?.symbol || symbolInput || DEFAULT_STOCK_SYMBOL).trim().toLowerCase()
 
   const loadData = async () => {
     setLoading(true)
@@ -311,8 +374,8 @@ function App() {
     setPlanResult(null)
 
     try {
-      const symbolToLoad = symbolInput.trim().toUpperCase()
-      if (!symbolToLoad) throw new Error('Please select or type a stock symbol.')
+      const resolved = await resolveSymbolFromInput(symbolInput, stockOptions)
+      const symbolToLoad = resolved.symbol
 
       const stockCacheKey  = `stocks-101:${symbolToLoad}`
       const marketCacheKey = `stocks-101:${MARKET_SYMBOL}`
@@ -373,8 +436,9 @@ function App() {
 
       setDataSource(stockSource === 'cache' ? 'yahoo' : stockSource)
       setPriceHistory({ prices: histSlice, labels: labelSlice })
+      setSymbolInput(symbolToLoad)
       setDashboard({
-        stockName: matchedStock?.name || symbolToLoad,
+        stockName: matchedStock?.name || resolved.name || symbolToLoad,
         symbol: symbolToLoad,
         currentPrice,
         riskLevel,
@@ -527,6 +591,8 @@ function App() {
               <Autocomplete
                 freeSolo
                 disableClearable
+                openOnFocus
+                autoHighlight
                 options={stockOptions}
                 sx={{ minWidth: { xs: '100%', sm: 360 } }}
                 getOptionLabel={(option) =>
@@ -534,15 +600,15 @@ function App() {
                 }
                 inputValue={symbolInput}
                 onInputChange={(_, newInputValue) => {
-                  setSymbolInput(newInputValue.toUpperCase())
+                  setSymbolInput(newInputValue)
                 }}
                 onChange={(_, newValue) => {
                   if (typeof newValue === 'string') {
-                    setSymbolInput(newValue.toUpperCase())
+                    setSymbolInput(newValue)
                     return
                   }
                   if (newValue?.symbol) {
-                    setSymbolInput(newValue.symbol.toUpperCase())
+                    setSymbolInput(newValue.symbol)
                   }
                 }}
                 renderInput={(params) => {
@@ -564,8 +630,8 @@ function App() {
                       {...params}
                       InputProps={safeInputWrapperProps}
                       inputProps={safeInputProps}
-                      label="Stock symbol"
-                      placeholder="Type any symbol (AAPL, MSFT, TSLA...)"
+                      label="Company or ticker"
+                      placeholder="Top 30 in dropdown, or type any company name"
                       size="small"
                     />
                   )
@@ -591,7 +657,7 @@ function App() {
                   />
                 )}
                 <Link
-                  href={`https://www.marketwatch.com/investing/stock/${symbolInput.trim().toLowerCase()}`}
+                  href={`https://www.marketwatch.com/investing/stock/${marketWatchSymbol}`}
                   target="_blank"
                   rel="noreferrer"
                   className="source-link"
