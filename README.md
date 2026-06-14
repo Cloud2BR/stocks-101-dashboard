@@ -29,7 +29,8 @@ Beginner-friendly React dashboard that starts empty and loads stock analytics on
 - React + Vite
 - Material UI
 - Chart.js + react-chartjs-2
-- Alpha Vantage public REST API (`demo` key)
+- Yahoo Finance chart endpoint (primary real-time feed)
+- Stooq CSV endpoint (real-data backup feed)
 
 ## Local Development
 

@@ -166,15 +166,27 @@
   font-size: 0.72rem;
   height: 22px;
 }
-.source-chip--live {
+.source-chip--yahoo {
   background: #e8f5e9;
   color: #1b5e20;
   border: none;
 }
-.source-chip--simulated {
-  background: #e3f2fd;
-  color: #0d47a1;
+.source-chip--stooq {
+  background: #fff8e1;
+  color: #a15c00;
   border: none;
+}
+
+.source-link {
+  align-self: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #dbeafe;
+  text-decoration: underline;
+}
+
+.source-link:hover {
+  color: #ffffff;
 }
 
 /* ── Taller price-history chart ────────────────────────────────────────── */

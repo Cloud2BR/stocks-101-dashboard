@@ -110,57 +110,82 @@ const INDICATOR_META = [
   },
 ]
 
-// ---------------------------------------------------------------------------
-// Yahoo Finance REST API (no key required, uses public endpoint)
-// Falls back silently to synthetic data when CORS or rate-limit blocks request
-// ---------------------------------------------------------------------------
+const formatLabelsFromTimestamps = (timestamps) =>
+  timestamps.map((ts) => {
+    const d = new Date(ts * 1000)
+    return `${d.getMonth() + 1}/${d.getDate()}`
+  })
+
 const fetchYahooFinanceSeries = async (symbol) => {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1y`
-  const response = await fetch(url)
+  const endpoint = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1y`
+  const response = await fetch(endpoint)
   if (!response.ok) throw new Error(`Yahoo Finance HTTP ${response.status}`)
+
   const json = await response.json()
   const result = json?.chart?.result?.[0]
   if (!result) throw new Error('No chart result from Yahoo Finance')
 
   const rawCloses = result.indicators?.quote?.[0]?.close ?? []
-  const timestamps  = result.timestamp ?? []
+  const timestamps = result.timestamp ?? []
 
-  // Filter out null bars (non-trading days)
   const valid = rawCloses
     .map((price, i) => ({ price, ts: timestamps[i] }))
-    .filter(({ price }) => price !== null && price !== undefined && isFinite(price))
+    .filter(({ price, ts }) => price !== null && price !== undefined && Number.isFinite(price) && ts)
+
+  if (valid.length < 30) throw new Error('Yahoo Finance returned insufficient data')
 
   const prices = valid.map(({ price }) => Number(price.toFixed(2)))
-  const labels = valid.map(({ ts }) => {
-    const d = new Date(ts * 1000)
+  const labels = formatLabelsFromTimestamps(valid.map(({ ts }) => ts))
+  const currentPrice = result.meta?.regularMarketPrice ?? prices.at(-1)
+
+  return {
+    prices,
+    labels,
+    currentPrice: Number(Number(currentPrice).toFixed(2)),
+    source: 'yahoo',
+  }
+}
+
+const fetchStooqSeries = async (symbol) => {
+  const stooqSymbol = symbol === 'SPY' ? 'spy.us' : `${symbol.toLowerCase()}.us`
+  const endpoint = `https://stooq.com/q/d/l/?s=${encodeURIComponent(stooqSymbol)}&i=d`
+  const response = await fetch(endpoint)
+  if (!response.ok) throw new Error(`Stooq HTTP ${response.status}`)
+
+  const csv = await response.text()
+  const rows = csv.trim().split('\n').slice(1)
+  const parsed = rows
+    .map((row) => {
+      const [date, open, high, low, close] = row.split(',')
+      const closeValue = Number.parseFloat(close)
+      if (!date || !Number.isFinite(closeValue)) return null
+      return { date, close: closeValue, open, high, low }
+    })
+    .filter(Boolean)
+
+  if (parsed.length < 30) throw new Error('Stooq returned insufficient data')
+
+  const lastYear = parsed.slice(-252)
+  const prices = lastYear.map((item) => Number(item.close.toFixed(2)))
+  const labels = lastYear.map((item) => {
+    const d = new Date(`${item.date}T00:00:00`)
     return `${d.getMonth() + 1}/${d.getDate()}`
   })
 
-  const currentPrice =
-    result.meta?.regularMarketPrice ?? prices.at(-1)
-
-  return { prices, labels, currentPrice: Number(Number(currentPrice).toFixed(2)) }
+  return {
+    prices,
+    labels,
+    currentPrice: Number(prices.at(-1).toFixed(2)),
+    source: 'stooq',
+  }
 }
 
-const symbolSeed = (symbol) =>
-  symbol
-    .split('')
-    .reduce((seed, char, index) => seed + char.charCodeAt(0) * (index + 17), 97)
-
-const generateSyntheticSeries = (symbol, days = 300) => {
-  const prices = []
-  const seed = symbolSeed(symbol)
-  let price = 50 + (seed % 250)
-
-  for (let index = 0; index < days; index += 1) {
-    const seasonal = Math.sin((index + seed) / 14) * 0.9
-    const drift = ((seed % 11) - 5) * 0.01
-    const noise = ((index * 37 + seed) % 19 - 9) * 0.04
-    price = Math.max(2, price + seasonal + drift + noise)
-    prices.push(Number(price.toFixed(2)))
+const fetchRealSeriesWithBackup = async (symbol) => {
+  try {
+    return await fetchYahooFinanceSeries(symbol)
+  } catch {
+    return fetchStooqSeries(symbol)
   }
-
-  return prices
 }
 
 const readCachedPrices = (cacheKey) => {
@@ -190,18 +215,6 @@ const writeCachedPrices = (cacheKey, prices) => {
   } catch {
     // Ignore storage write failures.
   }
-}
-
-const generateFallbackMarketSeries = () => {
-  const prices = []
-  let value = 400
-  for (let index = 0; index < 252; index += 1) {
-    const wave = Math.sin(index / 11) * 1.8
-    const drift = 0.18
-    value += drift + wave
-    prices.push(Number(value.toFixed(2)))
-  }
-  return prices
 }
 
 const dailyReturns = (prices) =>
@@ -281,7 +294,7 @@ function App() {
   const [error, setError] = useState('')
   const [dashboard, setDashboard] = useState(null)
   const [priceHistory, setPriceHistory] = useState(null)   // { prices, labels }
-  const [dataSource, setDataSource]     = useState(null)   // 'live' | 'simulated'
+  const [dataSource, setDataSource]     = useState(null)   // 'yahoo' | 'stooq'
   const [stockOptions] = useState(COMMON_STOCK_OPTIONS)
   const [symbolInput, setSymbolInput] = useState(DEFAULT_STOCK_SYMBOL)
 
@@ -304,34 +317,32 @@ function App() {
       const stockCacheKey  = `stocks-101:${symbolToLoad}`
       const marketCacheKey = `stocks-101:${MARKET_SYMBOL}`
 
-      // ── Stock prices (try live Yahoo Finance first) ─────────────────────
+      // ── Stock prices (real providers only) ──────────────────────────────
       let stockPrices   = readCachedPrices(stockCacheKey)
       let historyLabels = null
-      let usedLive      = false
+      let stockSource = 'cache'
+      let currentPriceFromFeed = null
 
       if (!stockPrices) {
-        try {
-          const liveData = await fetchYahooFinanceSeries(symbolToLoad)
-          stockPrices   = liveData.prices
-          historyLabels = liveData.labels
-          usedLive      = true
-        } catch {
-          stockPrices   = generateSyntheticSeries(symbolToLoad)
-          historyLabels = stockPrices.map((_, i) => `Day ${i + 1}`)
-        }
+        const liveData = await fetchRealSeriesWithBackup(symbolToLoad)
+        stockPrices = liveData.prices
+        historyLabels = liveData.labels
+        stockSource = liveData.source
+        currentPriceFromFeed = liveData.currentPrice
         writeCachedPrices(stockCacheKey, stockPrices)
       } else {
         historyLabels = stockPrices.map((_, i) => `Day ${i + 1}`)
       }
 
-      // ── Market benchmark (synthetic – we only need returns, not real value) ─
+      // ── Market benchmark (real provider, same fallback chain) ───────────
       let marketPrices = readCachedPrices(marketCacheKey)
       if (!marketPrices) {
-        marketPrices = generateFallbackMarketSeries()
+        const marketData = await fetchRealSeriesWithBackup(MARKET_SYMBOL)
+        marketPrices = marketData.prices
         writeCachedPrices(marketCacheKey, marketPrices)
       }
 
-      const currentPrice = stockPrices.at(-1)
+      const currentPrice = currentPriceFromFeed ?? stockPrices.at(-1)
       if (!Number.isFinite(currentPrice) || stockPrices.length < 30 || marketPrices.length < 30) {
         throw new Error('Not enough price history to compute indicators.')
       }
@@ -360,7 +371,7 @@ function App() {
       const histSlice  = stockPrices.slice(-252)
       const labelSlice = historyLabels.slice(-252)
 
-      setDataSource(usedLive ? 'live' : 'simulated')
+      setDataSource(stockSource === 'cache' ? 'yahoo' : stockSource)
       setPriceHistory({ prices: histSlice, labels: labelSlice })
       setDashboard({
         stockName: matchedStock?.name || symbolToLoad,
@@ -373,7 +384,11 @@ function App() {
         indicators: { volatility, beta, maxDrawdown },
       })
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Failed to load stock data.')
+      setError(
+        caughtError instanceof Error
+          ? `${caughtError.message}. Real-time providers may be blocking browser requests right now.`
+          : 'Failed to load stock data from live providers.',
+      )
     } finally {
       setLoading(false)
     }
@@ -571,10 +586,18 @@ function App() {
                 {dataSource && (
                   <Chip
                     size="small"
-                    label={dataSource === 'live' ? '● Live Data' : '● Simulated Data'}
+                    label={dataSource === 'yahoo' ? '● Yahoo Finance' : '● Stooq Backup'}
                     className={`source-chip source-chip--${dataSource}`}
                   />
                 )}
+                <Link
+                  href={`https://www.marketwatch.com/investing/stock/${symbolInput.trim().toLowerCase()}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="source-link"
+                >
+                  View on MarketWatch
+                </Link>
               </Stack>
             </Stack>
           </Stack>
@@ -610,7 +633,7 @@ function App() {
                     <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
                       {item.icon}
                       <Typography variant="subtitle2">{item.title}</Typography>
-                      <Tooltip title="Loads from local cached market model when you click Load Data.">
+                      <Tooltip title="Uses real quote history from Yahoo Finance, with Stooq as backup if Yahoo fails.">
                         <InfoOutlinedIcon fontSize="inherit" className="hint-icon" />
                       </Tooltip>
                     </Stack>
@@ -668,8 +691,13 @@ function App() {
               <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
                 <SsidChartIcon sx={{ color: '#1565c0' }} />
                 <Typography variant="h6">Price History (1 Year)</Typography>
-                {dataSource === 'live' && (
-                  <Chip label="Yahoo Finance" size="small" variant="outlined" sx={{ ml: 'auto', color: '#1565c0', borderColor: '#1565c0' }} />
+                {dataSource && (
+                  <Chip
+                    label={dataSource === 'yahoo' ? 'Yahoo Finance feed' : 'Stooq feed'}
+                    size="small"
+                    variant="outlined"
+                    sx={{ ml: 'auto', color: '#1565c0', borderColor: '#1565c0' }}
+                  />
                 )}
               </Stack>
               <Box className="chart-host chart-host--tall">
