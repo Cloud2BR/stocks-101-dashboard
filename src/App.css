@@ -40,6 +40,57 @@
   box-shadow: 0 8px 20px rgba(21, 34, 56, 0.06);
 }
 
+.identity-shell {
+  background: #f8fbff;
+}
+
+.identity-label {
+  color: #24508f;
+  letter-spacing: 0.18em;
+}
+
+.identity-title {
+  color: #132a4d;
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.identity-description {
+  color: #445a77;
+  max-width: 760px;
+  margin-bottom: 14px;
+}
+
+.identity-card {
+  min-height: 100%;
+  background: #ffffff;
+}
+
+.identity-avatar {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #d5e3f7;
+}
+
+.release-chip {
+  background: #dbe8ff;
+  color: #0f4ba4;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.release-list {
+  margin: 0;
+  padding-left: 22px;
+  color: #445a77;
+}
+
+.release-list li {
+  margin-bottom: 8px;
+}
+
 .hint-icon {
   color: #60738d;
 }

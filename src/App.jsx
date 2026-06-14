@@ -36,6 +36,8 @@ const STOCK_SYMBOL = 'IBM'
 const MARKET_SYMBOL = 'SPY'
 const ALPHA_VANTAGE_KEY = 'demo'
 const ALPHA_VANTAGE_URL = 'https://www.alphavantage.co/query'
+const OWNER_AVATAR = 'https://github.com/brown9804.png'
+const ORG_AVATAR = 'https://github.com/Cloud2BR.png'
 
 const INDICATOR_META = [
   {
@@ -295,6 +297,106 @@ function App() {
           </Stack>
 
           {error ? <Alert severity="error">{error}</Alert> : null}
+
+          <Card className="dashboard-card identity-shell">
+            <CardContent>
+              <Typography variant="overline" className="identity-label">
+                Project Identity
+              </Typography>
+              <Typography variant="h4" className="identity-title">
+                Owner / Organization
+              </Typography>
+              <Typography variant="body1" className="identity-description">
+                DocsFoundry v0.0.1 is presented as an open-source desktop release maintained by
+                the owner and published through the Cloud2BR organization.
+              </Typography>
+
+              <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <Card className="dashboard-card identity-card">
+                    <CardContent>
+                      <Typography variant="h6" sx={{ mb: 2 }}>
+                        Owner
+                      </Typography>
+                      <Stack direction="row" spacing={2} alignItems="center">
+                        <Box
+                          component="img"
+                          src={OWNER_AVATAR}
+                          alt="Timna Brown"
+                          className="identity-avatar"
+                        />
+                        <Stack spacing={0.5}>
+                          <Typography variant="h6">Timna Brown</Typography>
+                          <Typography variant="body1">Atlanta, USA</Typography>
+                          <Link href="https://github.com/brown9804" target="_blank" rel="noreferrer">
+                            @brown9804
+                          </Link>
+                          <Link
+                            href="https://www.linkedin.com/in/timna-b-939492161/"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            LinkedIn
+                          </Link>
+                        </Stack>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <Card className="dashboard-card identity-card">
+                    <CardContent>
+                      <Typography variant="h6" sx={{ mb: 2 }}>
+                        Organization
+                      </Typography>
+                      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                        <Box
+                          component="img"
+                          src={ORG_AVATAR}
+                          alt="Cloud2BR"
+                          className="identity-avatar"
+                        />
+                        <Typography variant="h6">Cloud2BR</Typography>
+                      </Stack>
+                      <Typography variant="body1" sx={{ mb: 1.5 }}>
+                        Cloud2BR is the publishing organization behind the site, release assets,
+                        and open-source project distribution.
+                      </Typography>
+                      <Link href="https://github.com/Cloud2BR/docs-foundry" target="_blank" rel="noreferrer">
+                        Cloud2BR/docs-foundry
+                      </Link>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <Card className="dashboard-card identity-card">
+                    <CardContent>
+                      <Chip label="v0.0.1 release" className="release-chip" />
+                      <Typography variant="h6" sx={{ mt: 2, mb: 1.5 }}>
+                        Release context
+                      </Typography>
+                      <Box component="ul" className="release-list">
+                        <li>
+                          <strong>Product:</strong> Electron desktop documentation workspace
+                        </li>
+                        <li>
+                          <strong>Release channel:</strong> GitHub Releases with tagged binaries and installers
+                        </li>
+                        <li>
+                          <strong>Presentation:</strong> GitHub Pages landing site for downloads and overview
+                        </li>
+                        <li>
+                          <strong>Scope:</strong> Initial public release for macOS, Windows, and Linux
+                        </li>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
 
           <Grid container spacing={2}>
             {[
