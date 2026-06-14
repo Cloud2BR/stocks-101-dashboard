@@ -386,14 +386,20 @@ function App() {
                     setSymbolInput(newValue.symbol.toUpperCase())
                   }
                 }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Stock symbol"
-                    placeholder="Type any symbol (AAPL, MSFT, TSLA...)"
-                    size="small"
-                  />
-                )}
+                renderInput={(params) => {
+                  const safeInputProps = { ...params.inputProps }
+                  delete safeInputProps.autoCapitalize
+
+                  return (
+                    <TextField
+                      {...params}
+                      inputProps={safeInputProps}
+                      label="Stock symbol"
+                      placeholder="Type any symbol (AAPL, MSFT, TSLA...)"
+                      size="small"
+                    />
+                  )
+                }}
               />
 
               <Button
