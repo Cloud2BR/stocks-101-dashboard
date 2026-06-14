@@ -36,9 +36,6 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Legend, ChartTooltip)
 
 const DEFAULT_STOCK_SYMBOL = 'IBM'
 const MARKET_SYMBOL = 'SPY'
-const ENABLE_REMOTE_FETCH = false
-const ALPHA_VANTAGE_URL = 'https://www.alphavantage.co/query'
-const ALPHA_VANTAGE_KEY = 'demo'
 const OWNER_AVATAR = 'https://github.com/brown9804.png'
 const ORG_AVATAR = 'https://github.com/Cloud2BR.png'
 const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12
@@ -77,24 +74,6 @@ const INDICATOR_META = [
   },
 ]
 
-const fetchDailySeries = async (symbol) => {
-  const response = await fetch(
-    `${ALPHA_VANTAGE_URL}?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=compact&apikey=${ALPHA_VANTAGE_KEY}`,
-  )
-
-  if (!response.ok) {
-    throw new Error(`Unable to load data for ${symbol}.`)
-  }
-
-  const payload = await response.json()
-
-  if (payload?.Note || payload?.Information || payload?.Error) {
-    throw new Error('Alpha Vantage limit reached. Please wait a minute and click Load Data again.')
-  }
-
-  return payload
-}
-
 const symbolSeed = (symbol) =>
   symbol
     .split('')
@@ -114,16 +93,6 @@ const generateSyntheticSeries = (symbol, days = 300) => {
   }
 
   return prices
-}
-
-const parseDailySeries = (payload) => {
-  const series = payload?.['Time Series (Daily)']
-  if (!series) return []
-
-  return Object.entries(series)
-    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-    .map(([, bar]) => Number.parseFloat(bar['4. close']))
-    .filter((value) => Number.isFinite(value))
 }
 
 const readCachedPrices = (cacheKey) => {
@@ -261,34 +230,20 @@ function App() {
 
       let stockPrices = readCachedPrices(stockCacheKey)
       if (!stockPrices) {
-        if (ENABLE_REMOTE_FETCH) {
-          const stockPayload = await fetchDailySeries(symbolToLoad)
-          stockPrices = parseDailySeries(stockPayload)
-        } else {
-          stockPrices = generateSyntheticSeries(symbolToLoad)
-        }
+        stockPrices = generateSyntheticSeries(symbolToLoad)
         writeCachedPrices(stockCacheKey, stockPrices)
       }
 
       let marketPrices = readCachedPrices(marketCacheKey)
       if (!marketPrices) {
-        if (ENABLE_REMOTE_FETCH) {
-          try {
-            const marketPayload = await fetchDailySeries(MARKET_SYMBOL)
-            marketPrices = parseDailySeries(marketPayload)
-          } catch {
-            marketPrices = generateFallbackMarketSeries()
-          }
-        } else {
-          marketPrices = generateFallbackMarketSeries()
-        }
+        marketPrices = generateFallbackMarketSeries()
         writeCachedPrices(marketCacheKey, marketPrices)
       }
 
       const currentPrice = stockPrices[stockPrices.length - 1]
 
       if (!Number.isFinite(currentPrice) || stockPrices.length < 30 || marketPrices.length < 30) {
-        throw new Error('No price history returned from Alpha Vantage.')
+        throw new Error('No locally modeled price history was generated.')
       }
 
       const stockReturns = dailyReturns(stockPrices)
