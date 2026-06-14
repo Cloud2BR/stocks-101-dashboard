@@ -34,8 +34,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Legend, ChartTooltip)
 
 const STOCK_SYMBOL = 'IBM'
 const MARKET_SYMBOL = 'SPY'
-const ALPHA_VANTAGE_KEY = 'demo'
-const ALPHA_VANTAGE_URL = 'https://www.alphavantage.co/query'
+const YAHOO_CHART_URL = 'https://query1.finance.yahoo.com/v8/finance/chart'
 const OWNER_AVATAR = 'https://github.com/brown9804.png'
 const ORG_AVATAR = 'https://github.com/Cloud2BR.png'
 
@@ -60,24 +59,32 @@ const INDICATOR_META = [
   },
 ]
 
-const readSeriesCloses = (payload) => {
-  const series = payload?.['Time Series (Daily)']
-  if (!series) return []
+const fetchChartData = async (symbol) => {
+  const response = await fetch(
+    `${YAHOO_CHART_URL}/${symbol}?range=1y&interval=1d&includePrePost=false&events=div,splits`,
+  )
 
-  return Object.entries(series)
-    .map(([date, bar]) => ({
-      date,
-      close: Number.parseFloat(bar['4. close']),
-    }))
-    .filter((point) => Number.isFinite(point.close))
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((point) => point.close)
+  if (!response.ok) {
+    throw new Error(`Unable to load data for ${symbol}.`)
+  }
+
+  return response.json()
+}
+
+const parseChartData = (payload) => {
+  const chartResult = payload?.chart?.result?.[0]
+  const closes = chartResult?.indicators?.quote?.[0]?.close ?? []
+
+  return {
+    meta: chartResult?.meta ?? {},
+    prices: closes.filter((value) => Number.isFinite(value)),
+  }
 }
 
 const dailyReturns = (prices) =>
   prices
     .slice(1)
-    .map((price, i) => (prices[i] > 0 ? price / prices[i] - 1 : 0))
+    .map((price, index) => (prices[index] > 0 ? price / prices[index] - 1 : 0))
     .filter((value) => Number.isFinite(value))
 
 const average = (values) =>
@@ -85,10 +92,12 @@ const average = (values) =>
 
 const standardDeviation = (values) => {
   if (!values.length) return 0
+
   const mean = average(values)
   const variance =
     values.reduce((sum, value) => sum + (value - mean) * (value - mean), 0) /
     values.length
+
   return Math.sqrt(variance)
 }
 
@@ -106,9 +115,9 @@ const calculateBeta = (assetReturns, marketReturns) => {
   let covariance = 0
   let marketVariance = 0
 
-  for (let i = 0; i < samples; i += 1) {
-    const stockDelta = stock[i] - stockMean
-    const marketDelta = market[i] - marketMean
+  for (let index = 0; index < samples; index += 1) {
+    const stockDelta = stock[index] - stockMean
+    const marketDelta = market[index] - marketMean
     covariance += stockDelta * marketDelta
     marketVariance += marketDelta * marketDelta
   }
@@ -154,43 +163,30 @@ function App() {
     setError('')
 
     try {
-      const urls = [
-        `${ALPHA_VANTAGE_URL}?function=GLOBAL_QUOTE&symbol=${STOCK_SYMBOL}&apikey=${ALPHA_VANTAGE_KEY}`,
-        `${ALPHA_VANTAGE_URL}?function=OVERVIEW&symbol=${STOCK_SYMBOL}&apikey=${ALPHA_VANTAGE_KEY}`,
-        `${ALPHA_VANTAGE_URL}?function=TIME_SERIES_DAILY&symbol=${STOCK_SYMBOL}&outputsize=compact&apikey=${ALPHA_VANTAGE_KEY}`,
-        `${ALPHA_VANTAGE_URL}?function=TIME_SERIES_DAILY&symbol=${MARKET_SYMBOL}&outputsize=compact&apikey=${ALPHA_VANTAGE_KEY}`,
-      ]
+      const [stockPayload, marketPayload] = await Promise.all([
+        fetchChartData(STOCK_SYMBOL),
+        fetchChartData(MARKET_SYMBOL),
+      ])
 
-      const responses = await Promise.all(urls.map((url) => fetch(url)))
-      const payloads = await Promise.all(responses.map((response) => response.json()))
-
-      if (payloads.some((payload) => payload?.Information || payload?.Note || payload?.Error)) {
-        throw new Error('API rate limit reached or invalid response received.')
-      }
-
-      const [quotePayload, overviewPayload, stockSeriesPayload, marketSeriesPayload] = payloads
-      const quote = quotePayload?.['Global Quote']
-      const currentPrice = Number.parseFloat(quote?.['05. price'])
-      const stockPrices = readSeriesCloses(stockSeriesPayload)
-      const marketPrices = readSeriesCloses(marketSeriesPayload)
+      const stockSeries = parseChartData(stockPayload)
+      const marketSeries = parseChartData(marketPayload)
+      const stockPrices = stockSeries.prices
+      const marketPrices = marketSeries.prices
+      const currentPrice = stockSeries.meta?.regularMarketPrice ?? stockPrices[stockPrices.length - 1]
 
       if (!Number.isFinite(currentPrice) || stockPrices.length < 30 || marketPrices.length < 30) {
-        throw new Error('Not enough market data returned from the API.')
+        throw new Error('No price history returned from Yahoo Finance.')
       }
 
       const stockReturns = dailyReturns(stockPrices)
       const marketReturns = dailyReturns(marketPrices)
       const volatility = calculateVolatility(stockReturns)
-
-      const betaFromOverview = Number.parseFloat(overviewPayload?.Beta)
-      const beta = Number.isFinite(betaFromOverview)
-        ? betaFromOverview
-        : calculateBeta(stockReturns, marketReturns)
-
+      const beta = calculateBeta(stockReturns, marketReturns)
       const maxDrawdown = calculateMaxDrawdown(stockPrices)
       const recentPrices = stockPrices.slice(-252)
       const recentHigh = Math.max(...recentPrices)
-      const potentialGain = recentHigh > 0 ? Math.max(0, ((recentHigh - currentPrice) / currentPrice) * 100) : 0
+      const potentialGain =
+        recentHigh > 0 ? Math.max(0, ((recentHigh - currentPrice) / currentPrice) * 100) : 0
 
       const riskScore =
         volatility * 100 * 0.45 +
@@ -200,8 +196,8 @@ function App() {
       const riskLevel = classifyRisk(riskScore)
       const signal = trafficSignal(riskLevel, potentialGain)
 
-      const computedDashboard = {
-        stockName: overviewPayload?.Name || STOCK_SYMBOL,
+      setDashboard({
+        stockName: stockSeries.meta?.longName || stockSeries.meta?.shortName || STOCK_SYMBOL,
         symbol: STOCK_SYMBOL,
         currentPrice,
         riskLevel,
@@ -213,9 +209,7 @@ function App() {
           beta,
           maxDrawdown,
         },
-      }
-
-      setDashboard(computedDashboard)
+      })
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to load stock data.')
     } finally {
@@ -248,7 +242,7 @@ function App() {
       },
       tooltip: {
         callbacks: {
-          label: (context) => `${context.label}: ${context.raw.toFixed(2)}`,
+          label: (context) => `${context.label}: ${Number(context.raw).toFixed(2)}`,
         },
       },
     },
@@ -277,7 +271,7 @@ function App() {
           >
             <Box>
               <Typography variant="h3" className="dashboard-title">
-                Stocks 101 Dashboard
+                Stock Dashboards 101
               </Typography>
               <Typography variant="body1" className="dashboard-subtitle">
                 Beginner-friendly view of risk, return, and market behavior for {STOCK_SYMBOL}.
@@ -297,106 +291,6 @@ function App() {
           </Stack>
 
           {error ? <Alert severity="error">{error}</Alert> : null}
-
-          <Card className="dashboard-card identity-shell">
-            <CardContent>
-              <Typography variant="overline" className="identity-label">
-                Project Identity
-              </Typography>
-              <Typography variant="h4" className="identity-title">
-                Owner / Organization
-              </Typography>
-              <Typography variant="body1" className="identity-description">
-                DocsFoundry v0.0.1 is presented as an open-source desktop release maintained by
-                the owner and published through the Cloud2BR organization.
-              </Typography>
-
-              <Grid container spacing={2} sx={{ mt: 0.5 }}>
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <Card className="dashboard-card identity-card">
-                    <CardContent>
-                      <Typography variant="h6" sx={{ mb: 2 }}>
-                        Owner
-                      </Typography>
-                      <Stack direction="row" spacing={2} alignItems="center">
-                        <Box
-                          component="img"
-                          src={OWNER_AVATAR}
-                          alt="Timna Brown"
-                          className="identity-avatar"
-                        />
-                        <Stack spacing={0.5}>
-                          <Typography variant="h6">Timna Brown</Typography>
-                          <Typography variant="body1">Atlanta, USA</Typography>
-                          <Link href="https://github.com/brown9804" target="_blank" rel="noreferrer">
-                            @brown9804
-                          </Link>
-                          <Link
-                            href="https://www.linkedin.com/in/timna-b-939492161/"
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            LinkedIn
-                          </Link>
-                        </Stack>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                </Grid>
-
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <Card className="dashboard-card identity-card">
-                    <CardContent>
-                      <Typography variant="h6" sx={{ mb: 2 }}>
-                        Organization
-                      </Typography>
-                      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
-                        <Box
-                          component="img"
-                          src={ORG_AVATAR}
-                          alt="Cloud2BR"
-                          className="identity-avatar"
-                        />
-                        <Typography variant="h6">Cloud2BR</Typography>
-                      </Stack>
-                      <Typography variant="body1" sx={{ mb: 1.5 }}>
-                        Cloud2BR is the publishing organization behind the site, release assets,
-                        and open-source project distribution.
-                      </Typography>
-                      <Link href="https://github.com/Cloud2BR/docs-foundry" target="_blank" rel="noreferrer">
-                        Cloud2BR/docs-foundry
-                      </Link>
-                    </CardContent>
-                  </Card>
-                </Grid>
-
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <Card className="dashboard-card identity-card">
-                    <CardContent>
-                      <Chip label="v0.0.1 release" className="release-chip" />
-                      <Typography variant="h6" sx={{ mt: 2, mb: 1.5 }}>
-                        Release context
-                      </Typography>
-                      <Box component="ul" className="release-list">
-                        <li>
-                          <strong>Product:</strong> Electron desktop documentation workspace
-                        </li>
-                        <li>
-                          <strong>Release channel:</strong> GitHub Releases with tagged binaries and installers
-                        </li>
-                        <li>
-                          <strong>Presentation:</strong> GitHub Pages landing site for downloads and overview
-                        </li>
-                        <li>
-                          <strong>Scope:</strong> Initial public release for macOS, Windows, and Linux
-                        </li>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
 
           <Grid container spacing={2}>
             {[
@@ -427,7 +321,7 @@ function App() {
                     <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
                       {item.icon}
                       <Typography variant="subtitle2">{item.title}</Typography>
-                      <Tooltip title="Loads from Alpha Vantage when you click Load Data.">
+                      <Tooltip title="Loads from Yahoo Finance chart data when you click Load Data.">
                         <InfoOutlinedIcon fontSize="inherit" className="hint-icon" />
                       </Tooltip>
                     </Stack>
@@ -512,6 +406,103 @@ function App() {
                   </Box>
                 ))}
               </Stack>
+            </CardContent>
+          </Card>
+
+          <Card className="dashboard-card identity-shell">
+            <CardContent>
+              <Typography variant="overline" className="identity-label">
+                Project Identity
+              </Typography>
+              <Typography variant="h4" className="identity-title">
+                Owner / Founder
+              </Typography>
+              <Typography variant="body1" className="identity-description">
+                Stock Dashboards 101 is maintained by Timna Brown and published through the
+                Cloud2BR organization.
+              </Typography>
+
+              <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Card className="dashboard-card identity-card">
+                    <CardContent>
+                      <Typography variant="h6" sx={{ mb: 2 }}>
+                        Owner
+                      </Typography>
+                      <Stack direction="row" spacing={2} alignItems="center">
+                        <Box
+                          component="img"
+                          src={OWNER_AVATAR}
+                          alt="Timna Brown"
+                          className="identity-avatar"
+                        />
+                        <Stack spacing={0.5}>
+                          <Typography variant="h6">Timna Brown</Typography>
+                          <Typography variant="body1">Atlanta, USA</Typography>
+                          <Link href="https://github.com/brown9804" target="_blank" rel="noreferrer">
+                            @brown9804
+                          </Link>
+                          <Link
+                            href="https://www.linkedin.com/in/timna-b-939492161/"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            LinkedIn
+                          </Link>
+                        </Stack>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Card className="dashboard-card identity-card">
+                    <CardContent>
+                      <Typography variant="h6" sx={{ mb: 2 }}>
+                        Founder / Organization
+                      </Typography>
+                      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                        <Box
+                          component="img"
+                          src={ORG_AVATAR}
+                          alt="Cloud2BR"
+                          className="identity-avatar"
+                        />
+                        <Typography variant="h6">Cloud2BR</Typography>
+                      </Stack>
+                      <Typography variant="body1" sx={{ mb: 1.5 }}>
+                        Cloud2BR supports publishing, release workflows, and project distribution.
+                      </Typography>
+                      <Link href="https://github.com/Cloud2BR/docs-foundry" target="_blank" rel="noreferrer">
+                        Cloud2BR/docs-foundry
+                      </Link>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+
+              <Card className="dashboard-card identity-card" sx={{ mt: 2 }}>
+                <CardContent>
+                  <Chip label="Release context" className="release-chip" />
+                  <Typography variant="h6" sx={{ mt: 2, mb: 1.5 }}>
+                    Dashboard details
+                  </Typography>
+                  <Box component="ul" className="release-list">
+                    <li>
+                      <strong>Product:</strong> Beginner stock analysis dashboard for GitHub Pages
+                    </li>
+                    <li>
+                      <strong>Data source:</strong> Yahoo Finance chart endpoint, no API key required
+                    </li>
+                    <li>
+                      <strong>Release channel:</strong> GitHub Actions Pages deployment from main
+                    </li>
+                    <li>
+                      <strong>Scope:</strong> IBM stock snapshot, benchmark comparison, and simple risk cues
+                    </li>
+                  </Box>
+                </CardContent>
+              </Card>
             </CardContent>
           </Card>
         </Stack>
