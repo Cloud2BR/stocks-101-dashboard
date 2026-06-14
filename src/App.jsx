@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
+  Autocomplete,
   Alert,
   Box,
   Button,
@@ -11,6 +12,7 @@ import {
   Grid,
   Link,
   Stack,
+  TextField,
   Tooltip,
   Typography,
 } from '@mui/material'
@@ -32,7 +34,7 @@ import './App.css'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Legend, ChartTooltip)
 
-const STOCK_SYMBOL = 'IBM'
+const DEFAULT_STOCK_SYMBOL = 'IBM'
 const MARKET_SYMBOL = 'SPY'
 const ALPHA_VANTAGE_URL = 'https://www.alphavantage.co/query'
 const ALPHA_VANTAGE_KEY = 'demo'
@@ -59,6 +61,78 @@ const INDICATOR_META = [
     link: 'https://www.investopedia.com/terms/m/maximum-drawdown-mdd.asp',
   },
 ]
+
+const DEFAULT_STOCK_OPTION = {
+  symbol: 'IBM',
+  name: 'International Business Machines Corporation',
+}
+
+const parseCsvLine = (line) => {
+  const fields = []
+  let current = ''
+  let inQuotes = false
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index]
+
+    if (char === '"') {
+      if (inQuotes && line[index + 1] === '"') {
+        current += '"'
+        index += 1
+      } else {
+        inQuotes = !inQuotes
+      }
+      continue
+    }
+
+    if (char === ',' && !inQuotes) {
+      fields.push(current)
+      current = ''
+      continue
+    }
+
+    current += char
+  }
+
+  fields.push(current)
+  return fields
+}
+
+const fetchStockUniverse = async () => {
+  const response = await fetch(
+    `${ALPHA_VANTAGE_URL}?function=LISTING_STATUS&apikey=${ALPHA_VANTAGE_KEY}`,
+  )
+
+  if (!response.ok) {
+    throw new Error('Unable to load stock universe.')
+  }
+
+  const csvText = await response.text()
+  const lines = csvText.split(/\r?\n/).filter(Boolean)
+  if (lines.length <= 1) return [DEFAULT_STOCK_OPTION]
+
+  const header = parseCsvLine(lines[0])
+  const symbolIndex = header.indexOf('symbol')
+  const nameIndex = header.indexOf('name')
+  const assetTypeIndex = header.indexOf('assetType')
+  const statusIndex = header.indexOf('status')
+
+  const options = lines
+    .slice(1)
+    .map(parseCsvLine)
+    .filter((row) => row[statusIndex] === 'Active' && row[assetTypeIndex] === 'Stock')
+    .map((row) => ({
+      symbol: (row[symbolIndex] ?? '').toUpperCase(),
+      name: row[nameIndex] ?? row[symbolIndex] ?? '',
+    }))
+    .filter((item) => item.symbol)
+
+  if (!options.some((item) => item.symbol === DEFAULT_STOCK_OPTION.symbol)) {
+    options.unshift(DEFAULT_STOCK_OPTION)
+  }
+
+  return options
+}
 
 const fetchDailySeries = async (symbol) => {
   const response = await fetch(
@@ -164,14 +238,42 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [dashboard, setDashboard] = useState(null)
+  const [stockOptions, setStockOptions] = useState([DEFAULT_STOCK_OPTION])
+  const [symbolInput, setSymbolInput] = useState(DEFAULT_STOCK_SYMBOL)
+
+  useEffect(() => {
+    let ignore = false
+
+    const loadUniverse = async () => {
+      try {
+        const options = await fetchStockUniverse()
+        if (!ignore && options.length) {
+          setStockOptions(options)
+        }
+      } catch {
+        // Keep default symbol option if catalog loading fails.
+      }
+    }
+
+    loadUniverse()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
 
   const loadData = async () => {
     setLoading(true)
     setError('')
 
     try {
+      const symbolToLoad = symbolInput.trim().toUpperCase()
+      if (!symbolToLoad) {
+        throw new Error('Please select or type a stock symbol.')
+      }
+
       const [stockPayload, marketPayload] = await Promise.all([
-        fetchDailySeries(STOCK_SYMBOL),
+        fetchDailySeries(symbolToLoad),
         fetchDailySeries(MARKET_SYMBOL),
       ])
 
@@ -201,9 +303,11 @@ function App() {
       const riskLevel = classifyRisk(riskScore)
       const signal = trafficSignal(riskLevel, potentialGain)
 
+      const matchedStock = stockOptions.find((item) => item.symbol === symbolToLoad)
+
       setDashboard({
-        stockName: 'International Business Machines Corporation',
-        symbol: STOCK_SYMBOL,
+        stockName: matchedStock?.name || symbolToLoad,
+        symbol: symbolToLoad,
         currentPrice,
         riskLevel,
         potentialGain,
@@ -279,20 +383,53 @@ function App() {
                 Stock Dashboards 101
               </Typography>
               <Typography variant="body1" className="dashboard-subtitle">
-                Beginner-friendly view of risk, return, and market behavior for {STOCK_SYMBOL}.
+                Beginner-friendly view of risk, return, and market behavior for any stock symbol.
               </Typography>
             </Box>
 
-            <Button
-              size="large"
-              variant="contained"
-              onClick={loadData}
-              disabled={loading}
-              className="load-button"
-              startIcon={loading ? <CircularProgress color="inherit" size={18} /> : <TrendingUpIcon />}
-            >
-              {loading ? 'Loading...' : 'Load Data'}
-            </Button>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="stretch">
+              <Autocomplete
+                freeSolo
+                disableClearable
+                options={stockOptions}
+                sx={{ minWidth: { xs: '100%', sm: 360 } }}
+                getOptionLabel={(option) =>
+                  typeof option === 'string' ? option : `${option.symbol} - ${option.name}`
+                }
+                inputValue={symbolInput}
+                onInputChange={(_, newInputValue) => {
+                  setSymbolInput(newInputValue.toUpperCase())
+                }}
+                onChange={(_, newValue) => {
+                  if (typeof newValue === 'string') {
+                    setSymbolInput(newValue.toUpperCase())
+                    return
+                  }
+                  if (newValue?.symbol) {
+                    setSymbolInput(newValue.symbol.toUpperCase())
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Stock symbol"
+                    placeholder="Type any symbol (AAPL, MSFT, TSLA...)"
+                    size="small"
+                  />
+                )}
+              />
+
+              <Button
+                size="large"
+                variant="contained"
+                onClick={loadData}
+                disabled={loading}
+                className="load-button"
+                startIcon={loading ? <CircularProgress color="inherit" size={18} /> : <TrendingUpIcon />}
+              >
+                {loading ? 'Loading...' : 'Load Data'}
+              </Button>
+            </Stack>
           </Stack>
 
           {error ? <Alert severity="error">{error}</Alert> : null}
