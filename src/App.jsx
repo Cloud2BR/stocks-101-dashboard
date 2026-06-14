@@ -56,7 +56,6 @@ ChartJS.register(
   ChartTooltip,
 )
 
-const DEFAULT_STOCK_SYMBOL = 'IBM'
 const MARKET_SYMBOL = 'SPY'
 const OWNER_AVATAR = 'https://github.com/brown9804.png'
 const ORG_AVATAR = 'https://github.com/Cloud2BR.png'
@@ -111,13 +110,22 @@ const COMMON_STOCK_OPTIONS = [
 
 const resolveSymbolFromInput = async (inputText, stockOptions) => {
   const raw = inputText.trim()
-  if (!raw) throw new Error('Please select or type a stock symbol or company name.')
+  if (!raw) throw new Error('Please select a company from the dropdown or type a ticker symbol.')
+
+  // Handle "MSFT - Microsoft Corporation" format stored when user picks from dropdown
+  const dashParts = raw.split(' - ')
+  if (dashParts.length >= 2) {
+    const possibleSymbol = dashParts[0].trim().toUpperCase()
+    const fromDash = stockOptions.find((item) => item.symbol === possibleSymbol)
+    if (fromDash) return { symbol: fromDash.symbol, name: fromDash.name }
+  }
 
   const upper = raw.toUpperCase()
+  const normalized = raw.toLowerCase()
+
   const exactSymbol = stockOptions.find((item) => item.symbol === upper)
   if (exactSymbol) return { symbol: exactSymbol.symbol, name: exactSymbol.name }
 
-  const normalized = raw.toLowerCase()
   const exactName = stockOptions.find((item) => item.name.toLowerCase() === normalized)
   if (exactName) return { symbol: exactName.symbol, name: exactName.name }
 
@@ -358,7 +366,7 @@ function App() {
   const [priceHistory, setPriceHistory] = useState(null)   // { prices, labels }
   const [dataSource, setDataSource]     = useState(null)   // 'yahoo' | 'stooq'
   const [stockOptions] = useState(COMMON_STOCK_OPTIONS)
-  const [symbolInput, setSymbolInput] = useState(DEFAULT_STOCK_SYMBOL)
+  const [symbolInput, setSymbolInput] = useState('')
 
   // Investment planner state
   const [investAmount,   setInvestAmount]   = useState('1000')
@@ -366,7 +374,7 @@ function App() {
   const [targetReturn,   setTargetReturn]   = useState('10')
   const [planResult,     setPlanResult]     = useState(null)
   const [planError,      setPlanError]      = useState('')
-  const marketWatchSymbol = (dashboard?.symbol || symbolInput || DEFAULT_STOCK_SYMBOL).trim().toLowerCase()
+  const marketWatchSymbol = (dashboard?.symbol || symbolInput || '').trim().split(' - ')[0].toLowerCase()
 
   const loadData = async () => {
     setLoading(true)
@@ -436,7 +444,7 @@ function App() {
 
       setDataSource(stockSource === 'cache' ? 'yahoo' : stockSource)
       setPriceHistory({ prices: histSlice, labels: labelSlice })
-      setSymbolInput(symbolToLoad)
+      setSymbolInput(`${symbolToLoad} - ${resolved.name !== symbolToLoad ? resolved.name : (matchedStock?.name ?? symbolToLoad)}`)
       setDashboard({
         stockName: matchedStock?.name || resolved.name || symbolToLoad,
         symbol: symbolToLoad,
@@ -594,21 +602,28 @@ function App() {
                 openOnFocus
                 autoHighlight
                 options={stockOptions}
-                sx={{ minWidth: { xs: '100%', sm: 360 } }}
+                sx={{ minWidth: { xs: '100%', sm: 400 } }}
                 getOptionLabel={(option) =>
                   typeof option === 'string' ? option : `${option.symbol} - ${option.name}`
                 }
+                filterOptions={(options, { inputValue: iv }) => {
+                  if (!iv.trim()) return options
+                  const lower = iv.toLowerCase()
+                  return options.filter(
+                    (opt) =>
+                      opt.symbol.toLowerCase().includes(lower) ||
+                      opt.name.toLowerCase().includes(lower),
+                  )
+                }}
                 inputValue={symbolInput}
-                onInputChange={(_, newInputValue) => {
-                  setSymbolInput(newInputValue)
+                onInputChange={(_, newInputValue, reason) => {
+                  if (reason === 'input') setSymbolInput(newInputValue)
                 }}
                 onChange={(_, newValue) => {
-                  if (typeof newValue === 'string') {
+                  if (typeof newValue === 'object' && newValue?.symbol) {
+                    setSymbolInput(`${newValue.symbol} - ${newValue.name}`)
+                  } else if (typeof newValue === 'string') {
                     setSymbolInput(newValue)
-                    return
-                  }
-                  if (newValue?.symbol) {
-                    setSymbolInput(newValue.symbol)
                   }
                 }}
                 renderInput={(params) => {
@@ -630,8 +645,8 @@ function App() {
                       {...params}
                       InputProps={safeInputWrapperProps}
                       inputProps={safeInputProps}
-                      label="Company or ticker"
-                      placeholder="Top 30 in dropdown, or type any company name"
+                      label="Search company or ticker"
+                      placeholder="Click to browse top 30, or type a company name/symbol"
                       size="small"
                     />
                   )
