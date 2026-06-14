@@ -616,8 +616,8 @@ function App() {
                   )
                 }}
                 inputValue={symbolInput}
-                onInputChange={(_, newInputValue, reason) => {
-                  if (reason === 'input') setSymbolInput(newInputValue)
+                onInputChange={(_, newInputValue) => {
+                  setSymbolInput(newInputValue)
                 }}
                 onChange={(_, newValue) => {
                   if (typeof newValue === 'object' && newValue?.symbol) {
@@ -644,10 +644,17 @@ function App() {
                     <TextField
                       {...params}
                       InputProps={safeInputWrapperProps}
-                      inputProps={safeInputProps}
+                      inputProps={{
+                        ...safeInputProps,
+                        id: 'stock-symbol-input',
+                        name: 'stock-symbol',
+                        title: 'Search for a stock symbol or company name from the dropdown',
+                      }}
+                      id="stock-symbol-input"
                       label="Search company or ticker"
                       placeholder="Click to browse top 30, or type a company name/symbol"
                       size="small"
+                      fullWidth
                     />
                   )
                 }}
