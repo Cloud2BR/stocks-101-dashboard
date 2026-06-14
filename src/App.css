@@ -158,3 +158,63 @@
     flex-direction: column;
   }
 }
+
+/* ── Data-source badge ─────────────────────────────────────────────────── */
+.source-chip {
+  align-self: center;
+  font-weight: 700;
+  font-size: 0.72rem;
+  height: 22px;
+}
+.source-chip--live {
+  background: #e8f5e9;
+  color: #1b5e20;
+  border: none;
+}
+.source-chip--simulated {
+  background: #e3f2fd;
+  color: #0d47a1;
+  border: none;
+}
+
+/* ── Taller price-history chart ────────────────────────────────────────── */
+.chart-host--tall {
+  height: 320px;
+}
+
+/* ── Investment planner ────────────────────────────────────────────────── */
+.analyze-button {
+  background: #1565c0;
+  color: #ffffff;
+  font-weight: 700;
+}
+.analyze-button:hover {
+  background: #0d47a1;
+}
+
+.plan-verdict--good {
+  background: #f1f8f1;
+  border: 1px solid #a5d6a7;
+}
+.plan-verdict--warn {
+  background: #fff8f6;
+  border: 1px solid #ef9a9a;
+}
+
+.plan-metric {
+  background: #f4f7fb;
+  border: 1px solid #dbe5f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.plan-metric__label {
+  display: block;
+  color: #607080;
+  margin-bottom: 4px;
+  font-size: 0.73rem;
+}
+.plan-metric__value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #152238;
+}

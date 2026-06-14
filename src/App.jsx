@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
-  Autocomplete,
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -9,36 +9,72 @@ import {
   Chip,
   CircularProgress,
   Container,
+  Divider,
+  FormControl,
   Grid,
+  InputAdornment,
+  InputLabel,
   Link,
+  MenuItem,
+  Select,
   Stack,
   TextField,
   Tooltip,
   Typography,
 } from '@mui/material'
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import CancelIcon from '@mui/icons-material/Cancel'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import LocalAtmIcon from '@mui/icons-material/LocalAtm'
+import ShowChartIcon from '@mui/icons-material/ShowChart'
+import SsidChartIcon from '@mui/icons-material/SsidChart'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
-import ShowChartIcon from '@mui/icons-material/ShowChart'
-import LocalAtmIcon from '@mui/icons-material/LocalAtm'
 import {
   BarElement,
   CategoryScale,
   Chart as ChartJS,
+  Filler,
   Legend,
+  LineElement,
   LinearScale,
+  PointElement,
   Tooltip as ChartTooltip,
 } from 'chart.js'
-import { Bar } from 'react-chartjs-2'
+import { Bar, Line } from 'react-chartjs-2'
 import './App.css'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Legend, ChartTooltip)
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Filler,
+  Legend,
+  ChartTooltip,
+)
 
 const DEFAULT_STOCK_SYMBOL = 'IBM'
 const MARKET_SYMBOL = 'SPY'
 const OWNER_AVATAR = 'https://github.com/brown9804.png'
 const ORG_AVATAR = 'https://github.com/Cloud2BR.png'
 const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12
+
+// Investment planner risk profiles
+const RISK_PROFILES = {
+  Conservative: { stopLoss: -0.05, maxExpectedReturn: 0.12, label: 'Conservative (−5% stop-loss)' },
+  Moderate:     { stopLoss: -0.10, maxExpectedReturn: 0.25, label: 'Moderate (−10% stop-loss)' },
+  Aggressive:   { stopLoss: -0.20, maxExpectedReturn: 0.60, label: 'Aggressive (−20% stop-loss)' },
+}
+
+// Which stock risk levels are compatible with each investor risk tolerance
+const STOCK_RISK_FIT = {
+  Conservative: ['Low'],
+  Moderate:     ['Low', 'Medium'],
+  Aggressive:   ['Low', 'Medium', 'High'],
+}
 
 const COMMON_STOCK_OPTIONS = [
   { symbol: 'AAPL', name: 'Apple Inc.' },
@@ -73,6 +109,38 @@ const INDICATOR_META = [
     link: 'https://www.investopedia.com/terms/m/maximum-drawdown-mdd.asp',
   },
 ]
+
+// ---------------------------------------------------------------------------
+// Yahoo Finance REST API (no key required, uses public endpoint)
+// Falls back silently to synthetic data when CORS or rate-limit blocks request
+// ---------------------------------------------------------------------------
+const fetchYahooFinanceSeries = async (symbol) => {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1y`
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Yahoo Finance HTTP ${response.status}`)
+  const json = await response.json()
+  const result = json?.chart?.result?.[0]
+  if (!result) throw new Error('No chart result from Yahoo Finance')
+
+  const rawCloses = result.indicators?.quote?.[0]?.close ?? []
+  const timestamps  = result.timestamp ?? []
+
+  // Filter out null bars (non-trading days)
+  const valid = rawCloses
+    .map((price, i) => ({ price, ts: timestamps[i] }))
+    .filter(({ price }) => price !== null && price !== undefined && isFinite(price))
+
+  const prices = valid.map(({ price }) => Number(price.toFixed(2)))
+  const labels = valid.map(({ ts }) => {
+    const d = new Date(ts * 1000)
+    return `${d.getMonth() + 1}/${d.getDate()}`
+  })
+
+  const currentPrice =
+    result.meta?.regularMarketPrice ?? prices.at(-1)
+
+  return { prices, labels, currentPrice: Number(Number(currentPrice).toFixed(2)) }
+}
 
 const symbolSeed = (symbol) =>
   symbol
@@ -212,49 +280,72 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [dashboard, setDashboard] = useState(null)
+  const [priceHistory, setPriceHistory] = useState(null)   // { prices, labels }
+  const [dataSource, setDataSource]     = useState(null)   // 'live' | 'simulated'
   const [stockOptions] = useState(COMMON_STOCK_OPTIONS)
   const [symbolInput, setSymbolInput] = useState(DEFAULT_STOCK_SYMBOL)
+
+  // Investment planner state
+  const [investAmount,   setInvestAmount]   = useState('1000')
+  const [riskTolerance,  setRiskTolerance]  = useState('Moderate')
+  const [targetReturn,   setTargetReturn]   = useState('10')
+  const [planResult,     setPlanResult]     = useState(null)
+  const [planError,      setPlanError]      = useState('')
 
   const loadData = async () => {
     setLoading(true)
     setError('')
+    setPlanResult(null)
 
     try {
       const symbolToLoad = symbolInput.trim().toUpperCase()
-      if (!symbolToLoad) {
-        throw new Error('Please select or type a stock symbol.')
-      }
+      if (!symbolToLoad) throw new Error('Please select or type a stock symbol.')
 
-      const stockCacheKey = `stocks-101:${symbolToLoad}`
+      const stockCacheKey  = `stocks-101:${symbolToLoad}`
       const marketCacheKey = `stocks-101:${MARKET_SYMBOL}`
 
-      let stockPrices = readCachedPrices(stockCacheKey)
+      // ── Stock prices (try live Yahoo Finance first) ─────────────────────
+      let stockPrices   = readCachedPrices(stockCacheKey)
+      let historyLabels = null
+      let usedLive      = false
+
       if (!stockPrices) {
-        stockPrices = generateSyntheticSeries(symbolToLoad)
+        try {
+          const liveData = await fetchYahooFinanceSeries(symbolToLoad)
+          stockPrices   = liveData.prices
+          historyLabels = liveData.labels
+          usedLive      = true
+        } catch {
+          stockPrices   = generateSyntheticSeries(symbolToLoad)
+          historyLabels = stockPrices.map((_, i) => `Day ${i + 1}`)
+        }
         writeCachedPrices(stockCacheKey, stockPrices)
+      } else {
+        historyLabels = stockPrices.map((_, i) => `Day ${i + 1}`)
       }
 
+      // ── Market benchmark (synthetic – we only need returns, not real value) ─
       let marketPrices = readCachedPrices(marketCacheKey)
       if (!marketPrices) {
         marketPrices = generateFallbackMarketSeries()
         writeCachedPrices(marketCacheKey, marketPrices)
       }
 
-      const currentPrice = stockPrices[stockPrices.length - 1]
-
+      const currentPrice = stockPrices.at(-1)
       if (!Number.isFinite(currentPrice) || stockPrices.length < 30 || marketPrices.length < 30) {
-        throw new Error('No locally modeled price history was generated.')
+        throw new Error('Not enough price history to compute indicators.')
       }
 
-      const stockReturns = dailyReturns(stockPrices)
+      const stockReturns  = dailyReturns(stockPrices)
       const marketReturns = dailyReturns(marketPrices)
-      const volatility = calculateVolatility(stockReturns)
-      const beta = calculateBeta(stockReturns, marketReturns)
-      const maxDrawdown = calculateMaxDrawdown(stockPrices)
-      const recentPrices = stockPrices.slice(-252)
-      const recentHigh = Math.max(...recentPrices)
-      const potentialGain =
-        recentHigh > 0 ? Math.max(0, ((recentHigh - currentPrice) / currentPrice) * 100) : 0
+      const volatility    = calculateVolatility(stockReturns)
+      const beta          = calculateBeta(stockReturns, marketReturns)
+      const maxDrawdown   = calculateMaxDrawdown(stockPrices)
+      const recentPrices  = stockPrices.slice(-252)
+      const recentHigh    = Math.max(...recentPrices)
+      const potentialGain = recentHigh > 0
+        ? Math.max(0, ((recentHigh - currentPrice) / currentPrice) * 100)
+        : 0
 
       const riskScore =
         volatility * 100 * 0.45 +
@@ -262,10 +353,15 @@ function App() {
         Math.abs(maxDrawdown) * 100 * 0.35
 
       const riskLevel = classifyRisk(riskScore)
-      const signal = trafficSignal(riskLevel, potentialGain)
-
+      const signal    = trafficSignal(riskLevel, potentialGain)
       const matchedStock = stockOptions.find((item) => item.symbol === symbolToLoad)
 
+      // Keep last 252 data points for the history chart
+      const histSlice  = stockPrices.slice(-252)
+      const labelSlice = historyLabels.slice(-252)
+
+      setDataSource(usedLive ? 'live' : 'simulated')
+      setPriceHistory({ prices: histSlice, labels: labelSlice })
       setDashboard({
         stockName: matchedStock?.name || symbolToLoad,
         symbol: symbolToLoad,
@@ -274,11 +370,7 @@ function App() {
         potentialGain,
         riskScore,
         signal,
-        indicators: {
-          volatility,
-          beta,
-          maxDrawdown,
-        },
+        indicators: { volatility, beta, maxDrawdown },
       })
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to load stock data.')
@@ -287,47 +379,115 @@ function App() {
     }
   }
 
-  const chartData = useMemo(() => {
-    if (!dashboard) return null
+  // ── Investment planner ──────────────────────────────────────────────────
+  const analyzePlan = () => {
+    setPlanError('')
+    if (!dashboard) { setPlanError('Load a stock first.'); return }
 
+    const amount    = parseFloat(investAmount)
+    const goalPct   = parseFloat(targetReturn)
+    if (!isFinite(amount) || amount <= 0) { setPlanError('Enter a valid investment amount.'); return }
+    if (!isFinite(goalPct) || goalPct <= 0) { setPlanError('Enter a valid target return (%).'); return }
+
+    const { currentPrice, riskLevel, indicators } = dashboard
+    if (currentPrice <= 0) { setPlanError('Current price is unavailable.'); return }
+
+    const profile       = RISK_PROFILES[riskTolerance]
+    const stopLossPct   = profile.stopLoss           // negative, e.g. -0.10
+    const shares        = Math.floor(amount / currentPrice)
+    const totalCost     = shares * currentPrice
+    const leftover      = amount - totalCost
+    const targetPrice   = currentPrice * (1 + goalPct / 100)
+    const stopPrice     = currentPrice * (1 + stopLossPct)
+    const maxGain       = shares * (targetPrice - currentPrice)
+    const maxLoss       = shares * Math.abs(stopLossPct) * currentPrice
+    const riskReward    = maxLoss > 0 ? maxGain / maxLoss : null
+    const stockFit      = STOCK_RISK_FIT[riskTolerance]?.includes(riskLevel) ?? false
+
+    // Rough "probability" heuristic using annualised volatility vs target
+    const annVol = indicators.volatility
+    const dailyVol = annVol > 0 ? annVol / Math.sqrt(252) : 0.01
+    // Z-score: how many std-devs away is the daily return needed
+    const dailyRetNeeded = goalPct / 100 / 252
+    const z = dailyVol > 0 ? dailyRetNeeded / dailyVol : 0
+    // Rough probability using logistic approximation
+    const rawProb = 1 / (1 + Math.exp(z * 2.5))
+    const probPct = Math.round(Math.min(90, Math.max(10, rawProb * 100)))
+
+    setPlanResult({
+      shares, totalCost, leftover,
+      targetPrice, stopPrice,
+      maxGain, maxLoss, riskReward,
+      stockFit, probPct,
+    })
+  }
+
+  // ── Chart data ──────────────────────────────────────────────────────────
+  const barChartData = useMemo(() => {
+    if (!dashboard) return null
     return {
       labels: ['Risk Score', 'Potential Return (%)'],
-      datasets: [
-        {
-          label: `${dashboard.symbol} Snapshot`,
-          data: [dashboard.riskScore, dashboard.potentialGain],
-          backgroundColor: ['#b7410e', '#2f7a3f'],
-          borderRadius: 8,
-        },
-      ],
+      datasets: [{
+        label: `${dashboard.symbol} Snapshot`,
+        data: [dashboard.riskScore, dashboard.potentialGain],
+        backgroundColor: ['#b7410e', '#2f7a3f'],
+        borderRadius: 8,
+      }],
     }
   }, [dashboard])
+
+  const lineChartData = useMemo(() => {
+    if (!priceHistory) return null
+    return {
+      labels: priceHistory.labels,
+      datasets: [{
+        label: `${dashboard?.symbol ?? ''} Close Price`,
+        data: priceHistory.prices,
+        borderColor: '#1565c0',
+        backgroundColor: 'rgba(21, 101, 192, 0.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        borderWidth: 2,
+      }],
+    }
+  }, [priceHistory, dashboard])
+
+  const lineChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => `$${Number(ctx.raw).toFixed(2)}`,
+        },
+      },
+    },
+    scales: {
+      x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } },
+      y: {
+        ticks: { callback: (v) => `$${v}` },
+      },
+    },
+  }
 
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: {
-        position: 'bottom',
-      },
+      legend: { position: 'bottom' },
       tooltip: {
         callbacks: {
           label: (context) => `${context.label}: ${Number(context.raw).toFixed(2)}`,
         },
       },
     },
-    scales: {
-      y: {
-        beginAtZero: true,
-      },
-    },
+    scales: { y: { beginAtZero: true } },
   }
 
-  const signalLabel = {
-    green: 'Attractive',
-    yellow: 'Neutral',
-    red: 'Risky',
-  }
+  const signalLabel = { green: 'Attractive', yellow: 'Neutral', red: 'Risky' }
 
   return (
     <Box className="dashboard-shell">
@@ -397,16 +557,25 @@ function App() {
                 }}
               />
 
-              <Button
-                size="large"
-                variant="contained"
-                onClick={loadData}
-                disabled={loading}
-                className="load-button"
-                startIcon={loading ? <CircularProgress color="inherit" size={18} /> : <TrendingUpIcon />}
-              >
-                {loading ? 'Loading...' : 'Load Data'}
-              </Button>
+              <Stack spacing={0.5}>
+                <Button
+                  size="large"
+                  variant="contained"
+                  onClick={loadData}
+                  disabled={loading}
+                  className="load-button"
+                  startIcon={loading ? <CircularProgress color="inherit" size={18} /> : <TrendingUpIcon />}
+                >
+                  {loading ? 'Loading...' : 'Load Data'}
+                </Button>
+                {dataSource && (
+                  <Chip
+                    size="small"
+                    label={dataSource === 'live' ? '● Live Data' : '● Simulated Data'}
+                    className={`source-chip source-chip--${dataSource}`}
+                  />
+                )}
+              </Stack>
             </Stack>
           </Stack>
 
@@ -460,8 +629,8 @@ function App() {
                     Risk vs. Potential Return
                   </Typography>
                   <Box className="chart-host">
-                    {chartData ? (
-                      <Bar data={chartData} options={chartOptions} />
+                    {barChartData ? (
+                      <Bar data={barChartData} options={chartOptions} />
                     ) : (
                       <Typography className="placeholder">No data loaded yet</Typography>
                     )}
@@ -496,6 +665,25 @@ function App() {
 
           <Card className="dashboard-card">
             <CardContent>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                <SsidChartIcon sx={{ color: '#1565c0' }} />
+                <Typography variant="h6">Price History (1 Year)</Typography>
+                {dataSource === 'live' && (
+                  <Chip label="Yahoo Finance" size="small" variant="outlined" sx={{ ml: 'auto', color: '#1565c0', borderColor: '#1565c0' }} />
+                )}
+              </Stack>
+              <Box className="chart-host chart-host--tall">
+                {lineChartData ? (
+                  <Line data={lineChartData} options={lineChartOptions} />
+                ) : (
+                  <Typography className="placeholder">Load a stock symbol to see price history</Typography>
+                )}
+              </Box>
+            </CardContent>
+          </Card>
+
+          <Card className="dashboard-card">
+            <CardContent>
               <Typography variant="h6" sx={{ mb: 2 }}>
                 Technical Indicators
               </Typography>
@@ -526,6 +714,128 @@ function App() {
                   </Box>
                 ))}
               </Stack>
+            </CardContent>
+          </Card>
+
+          {/* ── Investment Planner ────────────────────────────────────────── */}
+          <Card className="dashboard-card">
+            <CardContent>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                <AccountBalanceWalletIcon sx={{ color: '#1565c0' }} />
+                <Typography variant="h6">Investment Planner</Typography>
+                <Tooltip title="Enter your budget, risk comfort, and return goal. Click Analyze to see how this stock fits your plan.">
+                  <InfoOutlinedIcon fontSize="inherit" className="hint-icon" />
+                </Tooltip>
+              </Stack>
+              <Typography variant="body2" sx={{ color: '#556070', mb: 2 }}>
+                Model how a position in the loaded stock would perform relative to your goals. Data
+                is for educational purposes only — not financial advice.
+              </Typography>
+
+              <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <TextField
+                    label="Investment amount"
+                    type="number"
+                    size="small"
+                    fullWidth
+                    value={investAmount}
+                    onChange={(e) => setInvestAmount(e.target.value)}
+                    InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }}
+                    inputProps={{ min: 1, step: 100 }}
+                  />
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>Risk tolerance</InputLabel>
+                    <Select
+                      value={riskTolerance}
+                      label="Risk tolerance"
+                      onChange={(e) => setRiskTolerance(e.target.value)}
+                    >
+                      {Object.keys(RISK_PROFILES).map((key) => (
+                        <MenuItem key={key} value={key}>{RISK_PROFILES[key].label}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <TextField
+                    label="Target return"
+                    type="number"
+                    size="small"
+                    fullWidth
+                    value={targetReturn}
+                    onChange={(e) => setTargetReturn(e.target.value)}
+                    InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
+                    inputProps={{ min: 0.1, step: 1 }}
+                  />
+                </Grid>
+              </Grid>
+
+              <Button
+                variant="contained"
+                onClick={analyzePlan}
+                disabled={!dashboard}
+                className="analyze-button"
+                startIcon={<TrendingUpIcon />}
+              >
+                Analyze Investment
+              </Button>
+
+              {planError && <Alert severity="warning" sx={{ mt: 2 }}>{planError}</Alert>}
+
+              {planResult && (
+                <Box sx={{ mt: 3 }}>
+                  <Divider sx={{ mb: 2 }} />
+
+                  {/* Fit verdict banner */}
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    spacing={1}
+                    className={`plan-verdict plan-verdict--${planResult.stockFit ? 'good' : 'warn'}`}
+                    sx={{ mb: 2, p: 1.5, borderRadius: 2 }}
+                  >
+                    {planResult.stockFit
+                      ? <CheckCircleIcon sx={{ color: '#2e7d32' }} />
+                      : <CancelIcon sx={{ color: '#c62828' }} />}
+                    <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                      {planResult.stockFit
+                        ? `${dashboard.symbol} is a good fit for your ${riskTolerance} profile.`
+                        : `${dashboard.symbol} risk level (${dashboard.riskLevel}) may be too high for a ${riskTolerance} profile.`}
+                    </Typography>
+                  </Stack>
+
+                  <Grid container spacing={2}>
+                    {[
+                      { label: 'Shares you can buy',  value: planResult.shares.toLocaleString() },
+                      { label: 'Capital deployed',    value: `$${planResult.totalCost.toFixed(2)}` },
+                      { label: 'Leftover cash',       value: `$${planResult.leftover.toFixed(2)}` },
+                      { label: 'Target sell price',   value: `$${planResult.targetPrice.toFixed(2)}` },
+                      { label: 'Stop-loss price',     value: `$${planResult.stopPrice.toFixed(2)}` },
+                      { label: 'Max potential gain',  value: `$${planResult.maxGain.toFixed(2)}` },
+                      { label: 'Max potential loss',  value: `$${planResult.maxLoss.toFixed(2)}` },
+                      {
+                        label: 'Risk / Reward ratio',
+                        value: planResult.riskReward != null
+                          ? `${planResult.riskReward.toFixed(2)}:1`
+                          : 'N/A',
+                      },
+                      { label: 'Est. probability of hitting goal', value: `~${planResult.probPct}%` },
+                    ].map(({ label, value }) => (
+                      <Grid key={label} size={{ xs: 6, sm: 4, md: 3 }}>
+                        <Box className="plan-metric">
+                          <Typography variant="caption" className="plan-metric__label">{label}</Typography>
+                          <Typography variant="h6" className="plan-metric__value">{value}</Typography>
+                        </Box>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+              )}
             </CardContent>
           </Card>
 
