@@ -36,6 +36,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Legend, ChartTooltip)
 
 const DEFAULT_STOCK_SYMBOL = 'IBM'
 const MARKET_SYMBOL = 'SPY'
+const ENABLE_REMOTE_FETCH = false
 const ALPHA_VANTAGE_URL = 'https://www.alphavantage.co/query'
 const ALPHA_VANTAGE_KEY = 'demo'
 const OWNER_AVATAR = 'https://github.com/brown9804.png'
@@ -92,6 +93,27 @@ const fetchDailySeries = async (symbol) => {
   }
 
   return payload
+}
+
+const symbolSeed = (symbol) =>
+  symbol
+    .split('')
+    .reduce((seed, char, index) => seed + char.charCodeAt(0) * (index + 17), 97)
+
+const generateSyntheticSeries = (symbol, days = 300) => {
+  const prices = []
+  const seed = symbolSeed(symbol)
+  let price = 50 + (seed % 250)
+
+  for (let index = 0; index < days; index += 1) {
+    const seasonal = Math.sin((index + seed) / 14) * 0.9
+    const drift = ((seed % 11) - 5) * 0.01
+    const noise = ((index * 37 + seed) % 19 - 9) * 0.04
+    price = Math.max(2, price + seasonal + drift + noise)
+    prices.push(Number(price.toFixed(2)))
+  }
+
+  return prices
 }
 
 const parseDailySeries = (payload) => {
@@ -239,21 +261,28 @@ function App() {
 
       let stockPrices = readCachedPrices(stockCacheKey)
       if (!stockPrices) {
-        const stockPayload = await fetchDailySeries(symbolToLoad)
-        stockPrices = parseDailySeries(stockPayload)
+        if (ENABLE_REMOTE_FETCH) {
+          const stockPayload = await fetchDailySeries(symbolToLoad)
+          stockPrices = parseDailySeries(stockPayload)
+        } else {
+          stockPrices = generateSyntheticSeries(symbolToLoad)
+        }
         writeCachedPrices(stockCacheKey, stockPrices)
       }
 
       let marketPrices = readCachedPrices(marketCacheKey)
       if (!marketPrices) {
-        try {
-          const marketPayload = await fetchDailySeries(MARKET_SYMBOL)
-          marketPrices = parseDailySeries(marketPayload)
-          writeCachedPrices(marketCacheKey, marketPrices)
-        } catch {
+        if (ENABLE_REMOTE_FETCH) {
+          try {
+            const marketPayload = await fetchDailySeries(MARKET_SYMBOL)
+            marketPrices = parseDailySeries(marketPayload)
+          } catch {
+            marketPrices = generateFallbackMarketSeries()
+          }
+        } else {
           marketPrices = generateFallbackMarketSeries()
-          writeCachedPrices(marketCacheKey, marketPrices)
         }
+        writeCachedPrices(marketCacheKey, marketPrices)
       }
 
       const currentPrice = stockPrices[stockPrices.length - 1]
@@ -457,7 +486,7 @@ function App() {
                     <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
                       {item.icon}
                       <Typography variant="subtitle2">{item.title}</Typography>
-                      <Tooltip title="Loads from Alpha Vantage daily stock data when you click Load Data.">
+                      <Tooltip title="Loads from local cached market model when you click Load Data.">
                         <InfoOutlinedIcon fontSize="inherit" className="hint-icon" />
                       </Tooltip>
                     </Stack>
@@ -625,7 +654,7 @@ function App() {
                       <strong>Product:</strong> Beginner stock analysis dashboard for GitHub Pages
                     </li>
                     <li>
-                      <strong>Data source:</strong> Alpha Vantage daily stock endpoint
+                      <strong>Data source:</strong> Local deterministic market model for GitHub Pages compatibility
                     </li>
                     <li>
                       <strong>Release channel:</strong> GitHub Actions Pages deployment from main
