@@ -1,4 +1,4 @@
-# Stocks 101 Dashboard
+# Stock Dashboards 101
 
 Atlanta, USA
 
@@ -59,3 +59,10 @@ This repository includes an automated GitHub Actions workflow at `.github/workfl
 - Trigger: push to `main` and manual runs.
 - Behavior: builds the dashboard and deploys to the `gh-pages` branch.
 - Cleanup policy: uses an orphan publish mode so `gh-pages` always keeps only the latest deployment state.
+
+<!-- START BADGE -->
+<div align="center">
+	<img src="https://img.shields.io/badge/Total%20views-40-limegreen" alt="Total views">
+	<p>Refresh Date: 2026-04-07</p>
+</div>
+<!-- END BADGE -->
