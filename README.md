@@ -48,17 +48,16 @@ npm run build
 
 Pages base path is set for this repository (`/stocks-101-dashboard/`).
 
+GitHub Pages is deployed by the workflow at [.github/workflows/deploy-pages.yml](.github/workflows/deploy-pages.yml).
+
+1. Open the repository settings on GitHub.
+2. Set Pages source to `GitHub Actions`.
+3. Push to `main` or run the workflow manually.
+4. The workflow builds `dist/` and publishes the site from the latest successful run.
+
 ```bash
-npm run deploy
+npm run build
 ```
-
-## Deployment Pipeline (Clean Publish)
-
-This repository includes an automated GitHub Actions workflow at `.github/workflows/deploy-pages-clean.yml`.
-
-- Trigger: push to `main` and manual runs.
-- Behavior: builds the dashboard and deploys to the `gh-pages` branch.
-- Cleanup policy: uses an orphan publish mode so `gh-pages` always keeps only the latest deployment state.
 
 <!-- START BADGE -->
 <div align="center">
