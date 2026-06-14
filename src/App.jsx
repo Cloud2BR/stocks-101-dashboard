@@ -389,10 +389,21 @@ function App() {
                 renderInput={(params) => {
                   const safeInputProps = { ...params.inputProps }
                   delete safeInputProps.autoCapitalize
+                  delete safeInputProps.autocapitalize
+
+                  const safeInnerInputProps = { ...(params.InputProps?.inputProps ?? {}) }
+                  delete safeInnerInputProps.autoCapitalize
+                  delete safeInnerInputProps.autocapitalize
+
+                  const safeInputWrapperProps = {
+                    ...params.InputProps,
+                    inputProps: safeInnerInputProps,
+                  }
 
                   return (
                     <TextField
                       {...params}
+                      InputProps={safeInputWrapperProps}
                       inputProps={safeInputProps}
                       label="Stock symbol"
                       placeholder="Type any symbol (AAPL, MSFT, TSLA...)"
