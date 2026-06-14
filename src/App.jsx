@@ -267,7 +267,12 @@ function App() {
     <Box className="dashboard-shell">
       <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
         <Stack spacing={3}>
-          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2}>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            justifyContent="space-between"
+            gap={2}
+            className="dashboard-header"
+          >
             <Box>
               <Typography variant="h3" className="dashboard-title">
                 Stocks 101 Dashboard

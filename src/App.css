@@ -1,15 +1,23 @@
 .dashboard-shell {
   min-height: 100vh;
+  background: #ffffff;
+}
+
+.dashboard-header {
+  background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
+  border-radius: 16px;
+  padding: 24px;
+  align-items: center;
 }
 
 .dashboard-title {
   font-weight: 700;
-  color: #152238;
+  color: #ffffff;
   letter-spacing: 0.01em;
 }
 
 .dashboard-subtitle {
-  color: #3b4c63;
+  color: #dbeafe;
   margin-top: 8px;
 }
 
@@ -18,11 +26,12 @@
   min-height: 64px;
   font-size: 1.05rem;
   font-weight: 700;
-  background: #b7410e;
+  background: #ffffff;
+  color: #0d47a1;
 }
 
 .load-button:hover {
-  background: #9b370b;
+  background: #e8f0ff;
 }
 
 .dashboard-card {
