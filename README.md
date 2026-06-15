@@ -15,6 +15,7 @@ Beginner-friendly React dashboard that starts empty and loads stock analytics on
 
 - Placeholder-first UI: all cards and charts initially show `No data loaded yet`.
 - Single-click load flow updates all visualizations simultaneously.
+- Dashboard reads same-origin stock snapshot data (`src/data/stocks-snapshot.json`) generated server-side.
 - Technical indicators include plain-language descriptions and source links:
 	- Volatility (how much the price fluctuates)
 	- Beta (sensitivity to the overall market)
@@ -29,8 +30,8 @@ Beginner-friendly React dashboard that starts empty and loads stock analytics on
 - React + Vite
 - Material UI
 - Chart.js + react-chartjs-2
-- Yahoo Finance chart endpoint (primary real-time feed)
-- Stooq CSV endpoint (real-data backup feed)
+- Server-side stock snapshot generator (`scripts/update-stock-snapshot.mjs`)
+- Daily GitHub Actions snapshot refresh (`.github/workflows/update-stock-snapshot.yml`)
 
 ## Local Development
 
@@ -55,6 +56,12 @@ GitHub Pages is deployed by the workflow at [.github/workflows/deploy-pages.yml]
 2. Set Pages source to `GitHub Actions`.
 3. Push to `main` or run the workflow manually.
 4. The workflow builds `dist/` and publishes the site from the latest successful run.
+
+## Data Refresh Pipeline
+
+- Trigger manually from the `Update Stock Snapshot` workflow.
+- Scheduled on weekdays to refresh `src/data/stocks-snapshot.json`.
+- The app uses this same-origin snapshot at runtime, so the browser does not call third-party APIs directly.
 
 ```bash
 npm run build
