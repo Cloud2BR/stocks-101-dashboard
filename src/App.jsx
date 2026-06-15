@@ -505,6 +505,20 @@ function App() {
   }
 
   const signalLabel = { green: 'Attractive', yellow: 'Neutral', red: 'Risky' }
+  const trafficGuidance = {
+    green: {
+      title: 'Green: Attractive setup',
+      note: 'Risk is relatively lower and return potential is acceptable. Consider a small starter position with a stop-loss.',
+    },
+    yellow: {
+      title: 'Yellow: Mixed setup',
+      note: 'Some positives, some caution signs. Consider waiting for confirmation or using smaller position size.',
+    },
+    red: {
+      title: 'Red: High caution',
+      note: 'Risk appears elevated versus potential return. Consider avoiding entry or reducing exposure.',
+    },
+  }
   const beginnerGuide = dashboard
     ? beginnerGuideBySignal[dashboard.signal]
     : {
@@ -680,6 +694,28 @@ function App() {
                   <Typography variant="body1">
                     {dashboard ? signalLabel[dashboard.signal] : 'No data loaded yet'}
                   </Typography>
+
+                  <Box className="traffic-guide" sx={{ mt: 1.5 }}>
+                    {['green', 'yellow', 'red'].map((light) => {
+                      const isActive = dashboard?.signal === light
+                      return (
+                        <Box
+                          key={light}
+                          className={`traffic-guide-row ${isActive ? 'active' : ''}`}
+                        >
+                          <Box className={`traffic-guide-dot ${light}`} />
+                          <Box>
+                            <Typography variant="subtitle2" className="traffic-guide-title">
+                              {trafficGuidance[light].title}
+                            </Typography>
+                            <Typography variant="body2" className="traffic-guide-note">
+                              {trafficGuidance[light].note}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      )
+                    })}
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>

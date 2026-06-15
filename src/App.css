@@ -135,6 +135,54 @@
   border-color: #152238;
 }
 
+.traffic-guide {
+  display: grid;
+  gap: 10px;
+}
+
+.traffic-guide-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #e5edf6;
+  background: #f9fbff;
+}
+
+.traffic-guide-row.active {
+  border-color: #b9cde6;
+  background: #eef5ff;
+}
+
+.traffic-guide-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex: 0 0 12px;
+}
+
+.traffic-guide-dot.green {
+  background: #4caf50;
+}
+
+.traffic-guide-dot.yellow {
+  background: #ffc107;
+}
+
+.traffic-guide-dot.red {
+  background: #e53935;
+}
+
+.traffic-guide-title {
+  color: #1d3557;
+}
+
+.traffic-guide-note {
+  color: #4a617f;
+}
+
 .placeholder {
   color: #758ba3;
   font-size: 1rem;
