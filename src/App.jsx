@@ -616,9 +616,6 @@ function App() {
                     event.target.showPicker?.()
                   }}
                   inputProps={{
-                    id: 'stock-symbol-input',
-                    name: 'stock-symbol',
-                    title: 'Search for a stock symbol or company name from the dropdown',
                     'aria-label': 'Search company or ticker',
                     list: 'stock-symbol-options',
                     autoComplete: 'off',
@@ -832,7 +829,7 @@ function App() {
                     value={investAmount}
                     onChange={(e) => setInvestAmount(e.target.value)}
                     InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }}
-                    inputProps={{ min: 1, step: 100, id: 'investment-amount-input', name: 'investment-amount', title: 'Investment amount in US dollars', 'aria-label': 'Investment amount' }}
+                    inputProps={{ min: 1, step: 100, 'aria-label': 'Investment amount' }}
                   />
                 </Grid>
 
@@ -840,13 +837,14 @@ function App() {
                   <FormControl size="small" fullWidth>
                     <InputLabel id="risk-tolerance-label">Risk tolerance</InputLabel>
                     <Select
-                      id="risk-tolerance-select"
                       labelId="risk-tolerance-label"
+                      id="risk-tolerance-select"
                       name="risk-tolerance"
+                      title="Risk tolerance"
                       value={riskTolerance}
                       label="Risk tolerance"
                       onChange={(e) => setRiskTolerance(e.target.value)}
-                      inputProps={{ id: 'risk-tolerance-select', name: 'risk-tolerance', title: 'Risk tolerance', 'aria-label': 'Risk tolerance' }}
+                      inputProps={{ 'aria-label': 'Risk tolerance' }}
                     >
                       {Object.keys(RISK_PROFILES).map((key) => (
                         <MenuItem key={key} value={key}>{RISK_PROFILES[key].label}</MenuItem>
@@ -867,7 +865,7 @@ function App() {
                     value={targetReturn}
                     onChange={(e) => setTargetReturn(e.target.value)}
                     InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
-                    inputProps={{ min: 0.1, step: 1, id: 'target-return-input', name: 'target-return', title: 'Target return percentage', 'aria-label': 'Target return' }}
+                    inputProps={{ min: 0.1, step: 1, 'aria-label': 'Target return' }}
                   />
                 </Grid>
               </Grid>
