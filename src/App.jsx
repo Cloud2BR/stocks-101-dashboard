@@ -56,8 +56,8 @@ ChartJS.register(
 )
 
 const MARKET_SYMBOL = 'SPY'
-const OWNER_AVATAR = 'https://github.com/brown9804.png'
-const ORG_AVATAR = 'https://github.com/Cloud2BR.png'
+const OWNER_AVATAR = '/owner-avatar.png'
+const ORG_AVATAR = '/org-avatar.png'
 const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12
 
 // Investment planner risk profiles
@@ -616,6 +616,10 @@ function App() {
                     event.target.showPicker?.()
                   }}
                   inputProps={{
+                    id: 'stock-symbol-input',
+                    name: 'stock-symbol',
+                    title: 'Search for a stock symbol or company name from the dropdown',
+                    'aria-label': 'Search company or ticker',
                     list: 'stock-symbol-options',
                     autoComplete: 'off',
                   }}
@@ -818,6 +822,9 @@ function App() {
               <Grid container spacing={2} sx={{ mb: 2 }}>
                 <Grid size={{ xs: 12, sm: 4 }}>
                   <TextField
+                    id="investment-amount-input"
+                    name="investment-amount"
+                    title="Investment amount in US dollars"
                     label="Investment amount"
                     type="number"
                     size="small"
@@ -825,17 +832,21 @@ function App() {
                     value={investAmount}
                     onChange={(e) => setInvestAmount(e.target.value)}
                     InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }}
-                    inputProps={{ min: 1, step: 100 }}
+                    inputProps={{ min: 1, step: 100, id: 'investment-amount-input', name: 'investment-amount', title: 'Investment amount in US dollars', 'aria-label': 'Investment amount' }}
                   />
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 4 }}>
                   <FormControl size="small" fullWidth>
-                    <InputLabel>Risk tolerance</InputLabel>
+                    <InputLabel id="risk-tolerance-label">Risk tolerance</InputLabel>
                     <Select
+                      id="risk-tolerance-select"
+                      labelId="risk-tolerance-label"
+                      name="risk-tolerance"
                       value={riskTolerance}
                       label="Risk tolerance"
                       onChange={(e) => setRiskTolerance(e.target.value)}
+                      inputProps={{ id: 'risk-tolerance-select', name: 'risk-tolerance', title: 'Risk tolerance', 'aria-label': 'Risk tolerance' }}
                     >
                       {Object.keys(RISK_PROFILES).map((key) => (
                         <MenuItem key={key} value={key}>{RISK_PROFILES[key].label}</MenuItem>
@@ -846,6 +857,9 @@ function App() {
 
                 <Grid size={{ xs: 12, sm: 4 }}>
                   <TextField
+                    id="target-return-input"
+                    name="target-return"
+                    title="Target return percentage"
                     label="Target return"
                     type="number"
                     size="small"
@@ -853,7 +867,7 @@ function App() {
                     value={targetReturn}
                     onChange={(e) => setTargetReturn(e.target.value)}
                     InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
-                    inputProps={{ min: 0.1, step: 1 }}
+                    inputProps={{ min: 0.1, step: 1, id: 'target-return-input', name: 'target-return', title: 'Target return percentage', 'aria-label': 'Target return' }}
                   />
                 </Grid>
               </Grid>
