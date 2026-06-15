@@ -754,6 +754,18 @@ function App() {
                   </Box>
                 </Grid>
               </Grid>
+
+              <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
+                How to read the values (rule of thumb)
+              </Typography>
+              <Box component="ul" className="guide-list guide-rules">
+                <li><strong>Risk Score:</strong> lower is usually better. Under 25 = calmer, 25-45 = mixed, over 45 = higher caution.</li>
+                <li><strong>Potential Gain:</strong> higher can be better, but only if risk is acceptable and your thesis is clear.</li>
+                <li><strong>Volatility:</strong> lower means smaller price swings; higher means bigger moves up and down.</li>
+                <li><strong>Beta:</strong> near 1.0 follows market behavior, above 1.2 is more sensitive, below 0.8 is usually steadier.</li>
+                <li><strong>Max Drawdown:</strong> closer to 0% is better; large negative drawdowns (for example below -30%) mean deeper historical drops.</li>
+                <li><strong>Risk/Reward:</strong> higher ratio is generally better (for example 2:1 is typically stronger than 1:1).</li>
+              </Box>
             </CardContent>
           </Card>
 
