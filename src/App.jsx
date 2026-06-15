@@ -57,8 +57,8 @@ ChartJS.register(
 )
 
 const MARKET_SYMBOL = 'SPY'
-const OWNER_AVATAR = '/owner-avatar.png'
-const ORG_AVATAR = '/org-avatar.png'
+const OWNER_AVATAR = `${import.meta.env.BASE_URL}owner-avatar.png`
+const ORG_AVATAR = `${import.meta.env.BASE_URL}org-avatar.png`
 
 // Investment planner risk profiles
 const RISK_PROFILES = {
@@ -255,6 +255,33 @@ const trafficSignal = (riskLevel, potentialGain) => {
   return 'yellow'
 }
 
+const beginnerGuideBySignal = {
+  green: {
+    headline: 'Possible interpretation: favorable setup',
+    steps: [
+      'Consider a small starter position instead of going all-in.',
+      'Set a stop-loss level before entering the trade.',
+      'Review upcoming earnings/news before buying.',
+    ],
+  },
+  yellow: {
+    headline: 'Possible interpretation: mixed setup',
+    steps: [
+      'Wait for confirmation (trend improvement or better entry).',
+      'Keep this symbol on a watchlist and re-check weekly.',
+      'Use smaller size and tighter risk controls if entering.',
+    ],
+  },
+  red: {
+    headline: 'Possible interpretation: high caution',
+    steps: [
+      'Avoid impulsive buying while risk is elevated.',
+      'Compare with lower-risk alternatives in the same sector.',
+      'If holding already, review your exit or hedge plan.',
+    ],
+  },
+}
+
 function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -447,6 +474,16 @@ function App() {
   }
 
   const signalLabel = { green: 'Attractive', yellow: 'Neutral', red: 'Risky' }
+  const beginnerGuide = dashboard
+    ? beginnerGuideBySignal[dashboard.signal]
+    : {
+        headline: 'Load a symbol to get scenario-based guidance',
+        steps: [
+          'Pick a symbol from the dropdown (or type one) and click Load Data.',
+          'Review risk level, drawdown, and potential return together.',
+          'Use the Investment Planner to test position size before acting.',
+        ],
+      }
 
   return (
     <Box className="dashboard-shell">
@@ -665,6 +702,50 @@ function App() {
                   </Box>
                 ))}
               </Stack>
+            </CardContent>
+          </Card>
+
+          <Card className="dashboard-card">
+            <CardContent>
+              <Typography variant="h6" sx={{ mb: 0.75 }}>
+                Beginner Decision Guide
+              </Typography>
+              <Typography variant="body2" className="guide-intro" sx={{ mb: 2 }}>
+                This is educational guidance, not financial advice. Use it as a framework to think
+                through risk before deciding to buy, hold, or wait.
+              </Typography>
+
+              <Box className="guide-banner">
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  {beginnerGuide.headline}
+                </Typography>
+              </Box>
+
+              <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                <Grid size={{ xs: 12, md: 7 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Possible next actions
+                  </Typography>
+                  <Box component="ol" className="guide-list">
+                    {beginnerGuide.steps.map((step) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </Box>
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 5 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Quick beginner checklist
+                  </Typography>
+                  <Box component="ul" className="guide-list">
+                    <li>Know your max loss before you enter.</li>
+                    <li>Do not risk money needed in the next 12 months.</li>
+                    <li>Avoid single-stock concentration.</li>
+                    <li>Review earnings date and major news catalysts.</li>
+                    <li>Re-check thesis after price moves 10%+.</li>
+                  </Box>
+                </Grid>
+              </Grid>
             </CardContent>
           </Card>
 
