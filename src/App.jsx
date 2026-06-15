@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
   Alert,
-  Autocomplete,
   Box,
   Button,
   Card,
@@ -107,6 +106,8 @@ const COMMON_STOCK_OPTIONS = [
   { symbol: 'VZ', name: 'Verizon Communications Inc.' },
   { symbol: 'WMT', name: 'Walmart Inc.' },
 ]
+
+const formatStockOptionLabel = (option) => `${option.symbol} - ${option.name}`
 
 const resolveSymbolFromInput = async (inputText, stockOptions) => {
   const raw = inputText.trim()
@@ -456,10 +457,14 @@ function App() {
         indicators: { volatility, beta, maxDrawdown },
       })
     } catch (caughtError) {
+      const message =
+        caughtError instanceof Error ? caughtError.message : 'Failed to load stock data from live providers.'
+      const likelyProviderIssue = /HTTP|insufficient data|provider|Yahoo|Stooq/i.test(message)
+
       setError(
-        caughtError instanceof Error
-          ? `${caughtError.message}. Real-time providers may be blocking browser requests right now.`
-          : 'Failed to load stock data from live providers.',
+        likelyProviderIssue
+          ? `${message}. Real-time providers may be blocking browser requests right now.`
+          : message,
       )
     } finally {
       setLoading(false)
@@ -596,69 +601,31 @@ function App() {
             </Box>
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="stretch">
-              <Autocomplete
-                freeSolo
-                disableClearable
-                openOnFocus
-                autoHighlight
-                options={stockOptions}
-                sx={{ minWidth: { xs: '100%', sm: 400 } }}
-                getOptionLabel={(option) =>
-                  typeof option === 'string' ? option : `${option.symbol} - ${option.name}`
-                }
-                filterOptions={(options, { inputValue: iv }) => {
-                  if (!iv.trim()) return options
-                  const lower = iv.toLowerCase()
-                  return options.filter(
-                    (opt) =>
-                      opt.symbol.toLowerCase().includes(lower) ||
-                      opt.name.toLowerCase().includes(lower),
-                  )
-                }}
-                inputValue={symbolInput}
-                onInputChange={(_, newInputValue) => {
-                  setSymbolInput(newInputValue)
-                }}
-                onChange={(_, newValue) => {
-                  if (typeof newValue === 'object' && newValue?.symbol) {
-                    setSymbolInput(`${newValue.symbol} - ${newValue.name}`)
-                  } else if (typeof newValue === 'string') {
-                    setSymbolInput(newValue)
-                  }
-                }}
-                renderInput={(params) => {
-                  const safeInputProps = { ...params.inputProps }
-                  delete safeInputProps.autoCapitalize
-                  delete safeInputProps.autocapitalize
-
-                  const safeInnerInputProps = { ...(params.InputProps?.inputProps ?? {}) }
-                  delete safeInnerInputProps.autoCapitalize
-                  delete safeInnerInputProps.autocapitalize
-
-                  const safeInputWrapperProps = {
-                    ...params.InputProps,
-                    inputProps: safeInnerInputProps,
-                  }
-
-                  return (
-                    <TextField
-                      {...params}
-                      InputProps={safeInputWrapperProps}
-                      inputProps={{
-                        ...safeInputProps,
-                        id: 'stock-symbol-input',
-                        name: 'stock-symbol',
-                        title: 'Search for a stock symbol or company name from the dropdown',
-                      }}
-                      id="stock-symbol-input"
-                      label="Search company or ticker"
-                      placeholder="Click to browse top 30, or type a company name/symbol"
-                      size="small"
-                      fullWidth
-                    />
-                  )
-                }}
-              />
+              <Box sx={{ minWidth: { xs: '100%', sm: 400 } }}>
+                <TextField
+                  id="stock-symbol-input"
+                  name="stock-symbol"
+                  title="Search for a stock symbol or company name from the dropdown"
+                  label="Search company or ticker"
+                  placeholder="Click to browse top 30, or type a company name/symbol"
+                  size="small"
+                  fullWidth
+                  value={symbolInput}
+                  onChange={(event) => setSymbolInput(event.target.value)}
+                  onFocus={(event) => {
+                    event.target.showPicker?.()
+                  }}
+                  inputProps={{
+                    list: 'stock-symbol-options',
+                    autoComplete: 'off',
+                  }}
+                />
+                <datalist id="stock-symbol-options">
+                  {stockOptions.map((option) => (
+                    <option key={option.symbol} value={formatStockOptionLabel(option)} />
+                  ))}
+                </datalist>
+              </Box>
 
               <Stack spacing={0.5}>
                 <Button
