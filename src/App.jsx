@@ -380,6 +380,7 @@ function App() {
 
     const profile       = RISK_PROFILES[riskTolerance]
     const stopLossPct   = profile.stopLoss           // negative, e.g. -0.10
+    const profileMaxReturnPct = profile.maxExpectedReturn * 100
     const shares        = Math.floor(amount / currentPrice)
     const totalCost     = shares * currentPrice
     const leftover      = amount - totalCost
@@ -388,23 +389,53 @@ function App() {
     const maxGain       = shares * (targetPrice - currentPrice)
     const maxLoss       = shares * Math.abs(stopLossPct) * currentPrice
     const riskReward    = maxLoss > 0 ? maxGain / maxLoss : null
-    const stockFit      = STOCK_RISK_FIT[riskTolerance]?.includes(riskLevel) ?? false
+    const meetsRiskProfile = STOCK_RISK_FIT[riskTolerance]?.includes(riskLevel) ?? false
+    const canAffordOneShare = shares >= 1
+    const goalRealistic = goalPct <= profileMaxReturnPct
 
-    // Rough "probability" heuristic using annualised volatility vs target
+    // Heuristic probability model for beginners (not predictive advice)
+    let probScore = 55
+    const goalRatio = profileMaxReturnPct > 0 ? goalPct / profileMaxReturnPct : 2
     const annVol = indicators.volatility
-    const dailyVol = annVol > 0 ? annVol / Math.sqrt(252) : 0.01
-    // Z-score: how many std-devs away is the daily return needed
-    const dailyRetNeeded = goalPct / 100 / 252
-    const z = dailyVol > 0 ? dailyRetNeeded / dailyVol : 0
-    // Rough probability using logistic approximation
-    const rawProb = 1 / (1 + Math.exp(z * 2.5))
-    const probPct = Math.round(Math.min(90, Math.max(10, rawProb * 100)))
+
+    if (goalRatio > 1) probScore -= Math.min(30, (goalRatio - 1) * 25)
+    if (annVol > 0.25) probScore -= Math.min(20, (annVol - 0.25) * 60)
+    if (dashboard.potentialGain < goalPct) probScore -= 10
+    if (riskLevel === 'Low') probScore += 5
+    if (riskLevel === 'High') probScore -= 10
+    if (!canAffordOneShare) probScore = 0
+
+    const probPct = Math.round(Math.min(90, Math.max(0, probScore)))
+
+    let verdictType = 'good'
+    let verdictMessage = `${dashboard.symbol} is reasonably aligned with your ${riskTolerance} profile.`
+
+    if (!canAffordOneShare) {
+      verdictType = 'warn'
+      verdictMessage = `Your current budget cannot buy 1 full share of ${dashboard.symbol}. Increase budget or use fractional investing.`
+    } else if (!meetsRiskProfile) {
+      verdictType = 'warn'
+      verdictMessage = `${dashboard.symbol} risk level (${dashboard.riskLevel}) is above your ${riskTolerance} profile.`
+    } else if (!goalRealistic) {
+      verdictType = 'neutral'
+      verdictMessage = `Your ${goalPct.toFixed(0)}% target is above the typical ${riskTolerance.toLowerCase()} range (~${profileMaxReturnPct.toFixed(0)}%).`
+    } else if (riskReward != null && riskReward < 1) {
+      verdictType = 'warn'
+      verdictMessage = `Potential loss may exceed potential gain under this setup (risk/reward below 1:1).`
+    }
+
+    const stockFit = verdictType === 'good'
 
     setPlanResult({
       shares, totalCost, leftover,
       targetPrice, stopPrice,
       maxGain, maxLoss, riskReward,
       stockFit, probPct,
+      verdictType,
+      verdictMessage,
+      canAffordOneShare,
+      goalRealistic,
+      profileMaxReturnPct,
     })
   }
 
@@ -859,16 +890,17 @@ function App() {
                     direction="row"
                     alignItems="center"
                     spacing={1}
-                    className={`plan-verdict plan-verdict--${planResult.stockFit ? 'good' : 'warn'}`}
+                    className={`plan-verdict plan-verdict--${planResult.verdictType ?? (planResult.stockFit ? 'good' : 'warn')}`}
                     sx={{ mb: 2, p: 1.5, borderRadius: 2 }}
                   >
-                    {planResult.stockFit
+                    {(planResult.verdictType ?? (planResult.stockFit ? 'good' : 'warn')) === 'good'
                       ? <CheckCircleIcon sx={{ color: '#2e7d32' }} />
                       : <CancelIcon sx={{ color: '#c62828' }} />}
                     <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                      {planResult.stockFit
-                        ? `${dashboard.symbol} is a good fit for your ${riskTolerance} profile.`
-                        : `${dashboard.symbol} risk level (${dashboard.riskLevel}) may be too high for a ${riskTolerance} profile.`}
+                      {planResult.verdictMessage ??
+                        (planResult.stockFit
+                          ? `${dashboard.symbol} is a good fit for your ${riskTolerance} profile.`
+                          : `${dashboard.symbol} risk level (${dashboard.riskLevel}) may be too high for a ${riskTolerance} profile.`)}
                     </Typography>
                   </Stack>
 
@@ -877,6 +909,7 @@ function App() {
                       { label: 'Shares you can buy',  value: planResult.shares.toLocaleString() },
                       { label: 'Capital deployed',    value: `$${planResult.totalCost.toFixed(2)}` },
                       { label: 'Leftover cash',       value: `$${planResult.leftover.toFixed(2)}` },
+                      { label: 'Can buy 1+ share?',   value: planResult.canAffordOneShare ? 'Yes' : 'No' },
                       { label: 'Target sell price',   value: `$${planResult.targetPrice.toFixed(2)}` },
                       { label: 'Stop-loss price',     value: `$${planResult.stopPrice.toFixed(2)}` },
                       { label: 'Max potential gain',  value: `$${planResult.maxGain.toFixed(2)}` },
@@ -886,6 +919,16 @@ function App() {
                         value: planResult.riskReward != null
                           ? `${planResult.riskReward.toFixed(2)}:1`
                           : 'N/A',
+                      },
+                      {
+                        label: 'Goal realism check',
+                        value: planResult.goalRealistic
+                          ? `Within ${riskTolerance} range`
+                          : `Above ${riskTolerance} range`,
+                      },
+                      {
+                        label: 'Profile target range',
+                        value: `~${planResult.profileMaxReturnPct.toFixed(0)}% max`,
                       },
                       { label: 'Est. probability of hitting goal', value: `~${planResult.probPct}%` },
                     ].map(({ label, value }) => (

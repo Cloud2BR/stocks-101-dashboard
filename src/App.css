@@ -207,6 +207,10 @@
   background: #fff8f6;
   border: 1px solid #ef9a9a;
 }
+.plan-verdict--neutral {
+  background: #fffde8;
+  border: 1px solid #f0d47a;
+}
 
 .plan-metric {
   background: #f4f7fb;
