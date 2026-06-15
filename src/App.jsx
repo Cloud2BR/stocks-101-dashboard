@@ -570,21 +570,29 @@ function App() {
                 title: 'Stock Name',
                 icon: <ShowChartIcon fontSize="small" />,
                 value: dashboard ? `${dashboard.stockName} (${dashboard.symbol})` : 'No data loaded yet',
+                tooltip:
+                  'Company and ticker currently selected. Use this to confirm you are analyzing the right stock.',
               },
               {
                 title: 'Current Price',
                 icon: <LocalAtmIcon fontSize="small" />,
                 value: dashboard ? `$${dashboard.currentPrice.toFixed(2)}` : 'No data loaded yet',
+                tooltip:
+                  'Latest close price from the local snapshot. It helps estimate position size and target/stop levels.',
               },
               {
                 title: 'Risk Level',
                 icon: <WarningAmberIcon fontSize="small" />,
                 value: dashboard ? dashboard.riskLevel : 'No data loaded yet',
+                tooltip:
+                  'Combined view of volatility, beta, and drawdown. Low means steadier behavior; High means larger swings.',
               },
               {
                 title: 'Potential Gain',
                 icon: <TrendingUpIcon fontSize="small" />,
                 value: dashboard ? `${dashboard.potentialGain.toFixed(2)}%` : 'No data loaded yet',
+                tooltip:
+                  'Estimated upside versus the recent 1-year high. This is a scenario estimate, not a guaranteed return.',
               },
             ].map((item) => (
               <Grid key={item.title} size={{ xs: 12, sm: 6, md: 3 }}>
@@ -593,7 +601,7 @@ function App() {
                     <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
                       {item.icon}
                       <Typography variant="subtitle2">{item.title}</Typography>
-                      <Tooltip title="Uses same-origin stock snapshot data generated server-side.">
+                      <Tooltip title={item.tooltip}>
                         <InfoOutlinedIcon fontSize="inherit" className="hint-icon" />
                       </Tooltip>
                     </Stack>
@@ -755,7 +763,7 @@ function App() {
               <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
                 <AccountBalanceWalletIcon sx={{ color: '#1565c0' }} />
                 <Typography variant="h6">Investment Planner</Typography>
-                <Tooltip title="Enter your budget, risk comfort, and return goal. Click Analyze to see how this stock fits your plan.">
+                <Tooltip title="Enter budget, risk tolerance, and target return. The planner estimates shares, gain/loss range, and a simple fit check for beginners.">
                   <InfoOutlinedIcon fontSize="inherit" className="hint-icon" />
                 </Tooltip>
               </Stack>
