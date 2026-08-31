@@ -1,7 +1,8 @@
 body {
   margin: 0;
-  font-family: 'Source Sans 3', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: #ffffff;
+  font-family: 'IBM Plex Sans', sans-serif;
+  background: #f4f7f8;
+  color: #15232d;
 }
 
 #root {

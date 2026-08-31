@@ -532,7 +532,42 @@ function App() {
 
   return (
     <Box className="dashboard-shell">
-      <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+      <Box component="header" className="site-header">
+        <Box className="site-header__inner">
+          <Link
+            className="org-brand"
+            href="https://github.com/Cloud2BR"
+            target="_blank"
+            rel="noreferrer"
+            underline="none"
+          >
+            <Box component="img" src={ORG_AVATAR} alt="" />
+            <span>Cloud2BR</span>
+          </Link>
+          <Stack component="nav" direction="row" className="site-nav">
+            <Link
+              href="https://github.com/Cloud2BR/stocks-101-dashboard"
+              target="_blank"
+              rel="noreferrer"
+              underline="none"
+            >
+              Repository
+            </Link>
+            <Link
+              className="owner-link"
+              href="https://github.com/brown9804"
+              target="_blank"
+              rel="noreferrer"
+              underline="none"
+            >
+              <Box component="img" src={OWNER_AVATAR} alt="" />
+              <span>brown9804</span>
+            </Link>
+          </Stack>
+        </Box>
+      </Box>
+
+      <Container maxWidth="lg" className="dashboard-container">
         <Stack spacing={3}>
           <Stack
             direction={{ xs: 'column', md: 'row' }}
@@ -541,6 +576,9 @@ function App() {
             className="dashboard-header"
           >
             <Box>
+              <Typography variant="overline" className="dashboard-eyebrow">
+                Market learning workspace
+              </Typography>
               <Typography variant="h3" className="dashboard-title">
                 Stock Dashboards 101
               </Typography>

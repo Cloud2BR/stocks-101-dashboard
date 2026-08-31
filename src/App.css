@@ -302,3 +302,236 @@
 .guide-rules {
   margin-top: 4px;
 }
+
+/* Cloud2BR organization layout */
+.dashboard-shell {
+  background: #f4f7f8;
+  color: #15232d;
+}
+
+.site-header {
+  background: #003366;
+  box-shadow: 0 2px 8px rgba(0, 38, 77, 0.22);
+  color: #ffffff;
+  min-height: 64px;
+}
+
+.site-header__inner {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin: 0 auto;
+  max-width: 1500px;
+  min-height: 64px;
+  padding: 0 28px;
+}
+
+.org-brand,
+.owner-link,
+.site-nav {
+  align-items: center;
+  display: flex;
+}
+
+.site-header .MuiLink-root {
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.site-header .MuiLink-root:hover {
+  text-decoration: underline;
+}
+
+.org-brand {
+  gap: 12px;
+}
+
+.org-brand > img {
+  background: #ffffff;
+  border-radius: 50%;
+  height: 36px;
+  width: 36px;
+}
+
+.org-brand > span {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.site-nav {
+  gap: 22px;
+}
+
+.owner-link {
+  gap: 8px;
+}
+
+.owner-link img {
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 50%;
+  height: 28px;
+  object-fit: cover;
+  width: 28px;
+}
+
+.dashboard-container.MuiContainer-root {
+  padding-bottom: 56px;
+  padding-top: 34px;
+}
+
+.dashboard-header {
+  align-items: flex-start;
+  background: #ffffff;
+  border: 1px solid #d6e0e5;
+  border-radius: 8px;
+  border-top: 3px solid #004a99;
+  box-shadow: none;
+  padding: 24px;
+}
+
+.dashboard-eyebrow {
+  color: #006b74;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.dashboard-title.MuiTypography-root {
+  color: #15232d;
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.dashboard-subtitle.MuiTypography-root {
+  color: #5c6c76;
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+.load-button.MuiButton-root {
+  background: #004a99;
+  border-radius: 2px;
+  box-shadow: none;
+  color: #ffffff;
+  min-height: 40px;
+}
+
+.load-button.MuiButton-root:hover {
+  background: #003874;
+}
+
+.source-link.MuiLink-root {
+  color: #004a99;
+  text-align: right;
+}
+
+.source-link.MuiLink-root:hover {
+  color: #003874;
+}
+
+.dashboard-card.MuiCard-root {
+  border: 1px solid #d6e0e5;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.dashboard-card .MuiCardContent-root {
+  padding: 20px;
+}
+
+.dashboard-card .MuiCardContent-root:last-child {
+  padding-bottom: 20px;
+}
+
+.traffic-guide-row,
+.plan-metric,
+.guide-banner {
+  border-radius: 4px;
+}
+
+.traffic-guide-row {
+  background: #f8fafb;
+  border-color: #d6e0e5;
+}
+
+.traffic-guide-row.active {
+  background: #edf7f6;
+  border-color: #9fcdd0;
+}
+
+.guide-banner {
+  background: #eaf2fa;
+  border-color: #c2d4e5;
+}
+
+.analyze-button.MuiButton-root {
+  background: #004a99;
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+.analyze-button.MuiButton-root:hover {
+  background: #003874;
+}
+
+.plan-metric {
+  background: #f8fafb;
+  border-color: #d6e0e5;
+}
+
+.identity-shell {
+  background: #ffffff;
+  border-top: 3px solid #007f8b !important;
+}
+
+.identity-label {
+  color: #006b74;
+  letter-spacing: 0.08em;
+}
+
+.identity-avatar {
+  border-color: #d6e0e5;
+}
+
+.release-chip {
+  background: #eaf2fa;
+  color: #004a99;
+}
+
+@media (max-width: 640px) {
+  .site-header__inner {
+    padding: 0 16px;
+  }
+
+  .site-nav {
+    gap: 12px;
+  }
+
+  .site-nav > a:first-child {
+    display: none;
+  }
+
+  .dashboard-container.MuiContainer-root {
+    padding: 24px 12px 40px;
+  }
+
+  .dashboard-header {
+    border-radius: 6px;
+    padding: 18px;
+  }
+
+  .dashboard-title.MuiTypography-root {
+    font-size: 1.65rem;
+  }
+
+  .dashboard-card .MuiCardContent-root {
+    padding: 16px;
+  }
+
+  .dashboard-card .MuiCardContent-root:last-child {
+    padding-bottom: 16px;
+  }
+}
